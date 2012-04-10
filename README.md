@@ -51,7 +51,7 @@ caslib.py was written to be integrated with the python web framework, Django. Dj
 Below is an example of the settings, urls.py, views.py, and models.py that are required for caslib.py to function properly:
 
 ###settings.py###
-    ..
+    ```python
     ##CASLIB
     import caslib
     CAS_SERVER = "https://path.to.cas_server"
@@ -59,9 +59,9 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
     PROXY_URL = "https://path.to/CAS_proxyUrl"
     PROXY_CALLBACK_URL = "https://path.to/CAS_proxyCallback"
     caslib.cas_init(CAS_SERVER, SERVICE_URL, PROXY_URL, PROXY_CALLBACK_URL)
-    ..
+    ```
 ###models.py###
-    ..
+    ```python
     class UserProxy(models.Model):
       """
       This model will be used to Map usernames, initially unknown, to proxy IOU ID ticket pairs
@@ -69,66 +69,67 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
       username = models.CharField(max_length=128, blank=True, null=True)
       proxyIOU = models.CharField(max_length=40)
       proxyTicket = models.CharField(max_length=70)
-    ..
+    ```
 
 ###urls.py###
-    ..
+  ```python
     #This URL validates the ticket returned after CAS login
     (r'^CAS_serviceValidater', 'casclient.views.cas_validateTicket'),
     #This URL is a dummy callback
     (r'^CAS_proxyCallback', 'casclient.views.cas_proxyCallback'),
     #This URL records Proxy IOU & ID
     (r'^CAS_proxyUrl', 'casclient.views.cas_storeProxyIOU_ID'),
-    ..
+  ```
 
 ###views.py###
-    ..
-    def cas_validateTicket(request):
-    """
-    CAS Login : Phase 2/3 After returning from a CAS Login, this request will contain a ticket
-    cas_serviceValidate is called to validate the user's ticket
-    and the user is returned to 'sendback' (Authorized) or 'login' (Unauthorized) screen
-    (Optional - Phase 3/3 - With the username and proxyTicket, a user can be re-authorized.)
-    """
-    if not request.GET.has_key('ticket'):
-       return HttpResponseRedirect('/')
-    casTuple = caslib.cas_serviceValidate(request.GET['ticket'])
-    (truth, user, pgtIou) = casTuple if len(casTuple) == 3 else (casTuple[0], casTuple[1],"")
-    if not truth or not user:
-       return HttpResponseRedirect("/")
-    if pgtIou and pgtIou != "":
-       userProxy = UserProxy.objects.get(proxyIOU=pgtIou)
-       userProxy.username = user
-       userProxy.save()
-    return HttpResponseRedirect(request.GET['sendback']) if getToken(request,request.META['HTTP_X_AUTH_USER'],None) else HttpResponseRedirect("/")
+```python
+def cas_validateTicket(request):
+  """
+   CAS Login : Phase 2/3 After returning from a CAS Login, this request will contain a ticket
+   cas_serviceValidate is called to validate the user's ticket
+   and the user is returned to 'sendback' (Authorized) or 'login' (Unauthorized) screen
+   (Optional - Phase 3/3 - With the username and proxyTicket, a user can be re-authorized.)
+  """
+  if not request.GET.has_key('ticket'):
+    return HttpResponseRedirect('/')
+  casTuple = caslib.cas_serviceValidate(request.GET['ticket'])
+  (truth, user, pgtIou) = casTuple if len(casTuple) == 3 else (casTuple[0], casTuple[1],"")
+  if not truth or not user:
+    return HttpResponseRedirect("/")
+  if pgtIou and pgtIou != "":
+    userProxy = UserProxy.objects.get(proxyIOU=pgtIou)
+    userProxy.username = user
+    userProxy.save()
+  return HttpResponseRedirect(request.GET['sendback']) if getToken(request,request.META['HTTP_X_AUTH_USER'],None) else HttpResponseRedirect("/")
 
-    def cas_storeProxyIOU_ID(request):
-        """
-        Any request to the proxy url will contain the PROXY-TICKET IOU and ID
-        IOU and ID are mapped to a DB so they can be used later
-        """
-        if "pgtIou" in request.GET and "pgtId" in request.GET:
-           proxy = UserProxy(proxyIOU=request.GET["pgtIou"], proxyTicket=request.GET["pgtId"])
-           proxy.save()
-        return HttpResponse("Received proxy request. Thank you.")
+def cas_storeProxyIOU_ID(request):
+    """
+    Any request to the proxy url will contain the PROXY-TICKET IOU and ID
+    IOU and ID are mapped to a DB so they can be used later
+    """
+    if "pgtIou" in request.GET and "pgtId" in request.GET:
+      proxy = UserProxy(proxyIOU=request.GET["pgtIou"], proxyTicket=request.GET["pgtId"])
+      proxy.save()
+    return HttpResponse("Received proxy request. Thank you.")
 
-    def cas_proxyCallback(request):
+def cas_proxyCallback(request):
     """
     This is a placeholder for a proxyCallback service, needed for CAS authentication
     """
     return HttpResponse("I am at a RSA-2 or VeriSigned SSL Cert. website, and therefore a valid proxy.")
 def login(request):
-    """
-    CAS Login : Phase 1/3 Call CAS Login
-    """
-    #Form Sets 'next' when user clicks login 
-    if 'next' in request.POST:
-       url = CAS_SERVER+"/cas/login?service="+"https://my.djangoserver.org/CAS_serviceValidater?sendback=/application/"
-       return HttpResponseRedirect(url)
+  """
+   CAS Login : Phase 1/3 Call CAS Login
+  """
+  #Form Sets 'next' when user clicks login 
+  if 'next' in request.POST:
+    url = CAS_SERVER+"/cas/login?service="+"https://my.djangoserver.org/CAS_serviceValidater?sendback=/application/"
+    return HttpResponseRedirect(url)
     #After CAS login, he will hit 'cas_getTicket'
-    else:
-       template = get_template('application/login.html')
-  ..
+  else:
+    template = get_template('application/login.html')
+    
+```
 
 GENERIC USAGE
 =============
