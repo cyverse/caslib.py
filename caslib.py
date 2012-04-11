@@ -106,27 +106,53 @@ def cas_serviceValidate(ticket):
         return (False,username,"")
     return (False,username)
 
-def cas_proxyValidate(user, proxyTicket):
+def cas_proxy(proxyTicket, targetService=None):
     """
     Calls CAS using proxy to see what user is logged in
     returns true if the user matches parameter 'user' 
+    if empty, the targetService will be filled by cas_proxy_callback
     """
     global cas_server_url , cas_service_url , cas_proxy_url , cas_proxy_callback
+    if targetService is None:
+        targetService = cas_proxy_callback
     try:
-        cas_proxy_url = cas_server_url+"/cas/proxy?targetService="+cas_proxy_callback+"&pgt="+proxyTicket
-        logging.info("cas_proxyValidate /proxy URL:"+cas_proxy_url)
+        cas_proxy_url = cas_server_url+"/cas/proxy?targetService="+targetService+"&pgt="+proxyTicket
+        logging.info("cas_proxy /proxy URL:"+cas_proxy_url)
         conn = httplib2.Http()
         (head,resp) = conn.request(cas_proxy_url)
         casticket = parse_tag(resp,"cas:proxyTicket")
-        cas_valid_url = cas_server_url+"/cas/proxyValidate?ticket="+casticket+"&service="+cas_proxy_callback
+    except Exception, e:
+        logging.error("cas_proxy Exception:"+str(e))
+        casticket = ""
+    return casticket
+
+def cas_proxyValidate(user, casticket, service=None):
+    """
+    Calls /cas/proxyValidate with 'casticket' from a previous call to /cas/proxy
+    returns true if the user matches parameter 'user' 
+    if empty, OBthe service parameter will be filled by cas_proxy_callback
+    """
+    global cas_server_url , cas_service_url , cas_proxy_url , cas_proxy_callback
+    if service is None:
+        service = cas_proxy_callback
+    try:
+        cas_valid_url = cas_server_url+"/cas/proxyValidate?ticket="+casticket+"&service="+service
         logging.info("cas_proxyValidate /proxyValidate URL:"+cas_valid_url)
+        conn = httplib2.Http()
         (head,resp) = conn.request(cas_valid_url)
         casuser = parse_tag(resp,"cas:user")
     except Exception, e:
         logging.error("cas_proxyValidate Exception:"+str(e))
         return False
-
     return (casuser == user)
+
+def cas_reauthenticate(user, proxyTicket):
+    """
+    Generalizes the CAS proxy for simple reauthentication
+    returns true if the user in the proxyTicket matches the 'user' 
+    """
+    casticket = cas_proxy(proxyTicket)
+    return cas_proxyValidate(user, casticket)
 
 def parse_tag(str,tag):
    """
