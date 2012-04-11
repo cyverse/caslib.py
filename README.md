@@ -33,9 +33,9 @@ If your application requires authenticating the user once, caslib.py is great!
 - When your app receives a request with a "ticket" in the query string, CAS is sending you an authenticated user.
 - To validate the ticket:
 
-	casinit("https://path.to.cas_server","https://path.to/CAS_serviceValidater?sendback=/application/")    
-      	(truth,user) = caslib.cas_serviceValidate(request.GET['ticket'])    
-      	if (truth) redirect(user,sendback) else redirect(CASLoginURL)    
+    casinit("https://path.to.cas_server","https://path.to/CAS_serviceValidater?sendback=/application/")    
+    (truth,user) = caslib.cas_serviceValidate(request.GET['ticket'])    
+    if (truth) redirect(user,sendback) else redirect(CASLoginURL)    
 
 RE-AUTHENTICATION BY PROXY
 ==========================
