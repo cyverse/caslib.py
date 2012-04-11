@@ -124,11 +124,11 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
         """
         #Form Sets 'next' when user clicks login 
         if 'next' in request.POST:
-           url = CAS_SERVER+"/cas/login?service="+"https://my.djangoserver.org/CAS_serviceValidater?sendback=/application/"
-           return HttpResponseRedirect(url)
+          url = CAS_SERVER+"/cas/login?service="+"https://my.djangoserver.org/CAS_serviceValidater?sendback=/application/"
+          return HttpResponseRedirect(url)
         #After CAS login, he will hit 'cas_getTicket'
         else:
-           template = get_template('application/login.html')
+          template = get_template('application/login.html')
   ```
 
 GENERIC USAGE
