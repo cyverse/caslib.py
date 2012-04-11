@@ -85,23 +85,23 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
 ###views.py###
   ```python
    def cas_validateTicket(request):
-      """
-      CAS Login : Phase 2/3 After returning from a CAS Login, this request will contain a ticket
-      cas_serviceValidate is called to validate the user's ticket
-      and the user is returned to 'sendback' (Authorized) or 'login' (Unauthorized) screen
-      (Optional - Phase 3/3 - With the username and proxyTicket, a user can be re-authorized.)
-      """
-      if not request.GET.has_key('ticket'):
-        return HttpResponseRedirect('/')
-      casTuple = caslib.cas_serviceValidate(request.GET['ticket'])
-      (truth, user, pgtIou) = casTuple if len(casTuple) == 3 else (casTuple[0], casTuple[1],"")
-      if not truth or not user:
-        return HttpResponseRedirect("/")
-      if pgtIou and pgtIou != "":
-        userProxy = UserProxy.objects.get(proxyIOU=pgtIou)
-        userProxy.username = user
-        userProxy.save()
-      return HttpResponseRedirect(request.GET['sendback']) if getToken(request,request.META['HTTP_X_AUTH_USER'],None) else HttpResponseRedirect("/")
+       """
+       CAS Login : Phase 2/3 After returning from a CAS Login, this request will contain a ticket
+       cas_serviceValidate is called to validate the user's ticket
+       and the user is returned to 'sendback' (Authorized) or 'login' (Unauthorized) screen
+       (Optional - Phase 3/3 - With the username and proxyTicket, a user can be re-authorized.)
+       """
+       if not request.GET.has_key('ticket'):
+         return HttpResponseRedirect('/')
+       casTuple = caslib.cas_serviceValidate(request.GET['ticket'])
+       (truth, user, pgtIou) = casTuple if len(casTuple) == 3 else (casTuple[0], casTuple[1],"")
+       if not truth or not user:
+         return HttpResponseRedirect("/")
+       if pgtIou and pgtIou != "":
+         userProxy = UserProxy.objects.get(proxyIOU=pgtIou)
+         userProxy.username = user
+         userProxy.save()
+       return HttpResponseRedirect(request.GET['sendback']) if getToken(request,request.META['HTTP_X_AUTH_USER'],None) else HttpResponseRedirect("/")
 
     def cas_storeProxyIOU_ID(request):
         """
