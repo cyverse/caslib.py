@@ -51,7 +51,7 @@ caslib.py was written to be integrated with the python web framework, Django. Dj
 Below is an example of the settings, urls.py, views.py, and models.py that are required for caslib.py to function properly:
 
 ###settings.py###
-    ```python
+  ```python
     ##CASLIB
     import caslib
     CAS_SERVER = "https://path.to.cas_server"
@@ -59,9 +59,10 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
     PROXY_URL = "https://path.to/CAS_proxyUrl"
     PROXY_CALLBACK_URL = "https://path.to/CAS_proxyCallback"
     caslib.cas_init(CAS_SERVER, SERVICE_URL, PROXY_URL, PROXY_CALLBACK_URL)
-    ```
+  ```
+
 ###models.py###
-    ```python
+  ```python
     class UserProxy(models.Model):
       """
       This model will be used to Map usernames, initially unknown, to proxy IOU ID ticket pairs
@@ -69,7 +70,7 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
       username = models.CharField(max_length=128, blank=True, null=True)
       proxyIOU = models.CharField(max_length=40)
       proxyTicket = models.CharField(max_length=70)
-    ```
+  ```
 
 ###urls.py###
   ```python
