@@ -119,6 +119,7 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
         """
         return HttpResponse("I am at a RSA-2 or VeriSigned SSL Cert. website, and therefore a valid proxy.")
     def login(request):
+<<<<<<< HEAD
         """
         CAS Login : Phase 1/3 Call CAS Login
         """
@@ -126,6 +127,15 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
         if 'next' in request.POST:
            url = CAS_SERVER+"/cas/login?service="+"https://my.djangoserver.org/CAS_serviceValidater?sendback=/application/"
            return HttpResponseRedirect(url)
+=======
+    """
+    CAS Login : Phase 1/3 Call CAS Login
+    """
+      #Form Sets 'next' when user clicks login 
+      if 'next' in request.POST:
+        url = CAS_SERVER+"/cas/login?service="+"https://my.djangoserver.org/CAS_serviceValidater?sendback=/application/"
+        return HttpResponseRedirect(url)
+>>>>>>> 739b6afec22ff801a132fc89200a0614953211cd
         #After CAS login, he will hit 'cas_getTicket'
         else:
            template = get_template('application/login.html')
