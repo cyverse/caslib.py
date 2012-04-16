@@ -14,11 +14,11 @@ Basic Usage:
   * Web server acting as CAS Client needs two URLs:
   {
     login - This url is a landing page for the user. When they click login they should be redirected to :
-                 cas_server_url+"/cas/login?service="+cas_service_url
+                 AUTH_SERVER+"/cas/login?service="+SERVICE_URL
 
-    cas_service_url - The request landing at this URL will have a ticket, passed from CAS server.
+    SERVICE_URL - The request landing at this URL will have a ticket, passed from CAS server.
                       This page should call 'serviceValidate' and record the user as authorized.
-                      The cas_service_url should return the user to the correct locations depending on CAS validation.
+                      The SERVICE_URL should return the user to the correct locations depending on CAS validation.
   }
 
 Advanced Authentication Scenario:
@@ -37,19 +37,19 @@ Advanced Usage:
   *Web server acting as CAS Client needs four URLs:
   {
     login - This url is a landing page for the user. When they click [login] they should be redirected to :
-                 cas_server_url+"/cas/login?service="+cas_service_url
+                 AUTH_SERVER+"/cas/login?service="+SERVICE_URL
 
-    cas_service_url - The request landing at this URL will have a ticket in the query string (GET), passed from CAS server.
+    SERVICE_URL - The request landing at this URL will have a ticket in the query string (GET), passed from CAS server.
                       This page should call 'serviceValidate' 
                       This page should match:
                         (User,IOU) from serviceValidate
-                       to (IOU,ID) from cas_proxy_url 
-                      The cas_service_url should always redirect user to the correct locations depending on CAS validation.
+                       to (IOU,ID) from PROXY_URL 
+                      The SERVICE_URL should always redirect user to the correct locations depending on CAS validation.
 
-    cas_proxy_callback - This is a dummy URL, required by CAS server. 
-    NOTE: <cas_proxy_callback> Must be on same server AND RSA or VeriSign SSL Certified
+    PROXY_CALLBACK_URL - This is a dummy URL, required by CAS server. 
+    NOTE: <PROXY_CALLBACK_URL> Must be on same server AND RSA or VeriSign SSL Certified
 
-    cas_proxy_url - The request landing at this URL will have (ProxyID, ProxyIOU) in the query string (GET), from CAS server.
+    PROXY_URL - The request landing at this URL will have (ProxyID, ProxyIOU) in the query string (GET), from CAS server.
                     This page should record the ProxyID and ProxyIOU for immediate retrieval
   }
 
@@ -60,34 +60,35 @@ import logging
 import httplib2
 
 #Global variables
-cas_server_url = cas_service_url = cas_proxy_url = cas_proxy_callback = ""
+AUTH_SERVER = SERVICE_URL = PROXY_URL = PROXY_CALLBACK_URL = ""
 def cas_init(server_url, service_url, proxy_url='', proxy_callback=''):
   """
   server_url, service_url : Initializes caslib authentication service
   proxy_url and proxy_callback : Initialize optional proxy re-authentication service
   """
-  global cas_server_url , cas_service_url , cas_proxy_url , cas_proxy_callback
-  cas_server_url = server_url
-  cas_service_url = service_url
-  cas_proxy_url = proxy_url if proxy_url is not None else ""
-  cas_proxy_callback = proxy_callback if proxy_callback is not None else ""
+  global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
+  AUTH_SERVER = server_url
+  SERVICE_URL = service_url
+  PROXY_URL = proxy_url if proxy_url is not None else ""
+  PROXY_CALLBACK_URL = proxy_callback if proxy_callback is not None else ""
 
+#Methods
 def cas_serviceValidate(ticket):
     """
     Calls serviceValidate using (ticket)
     Call cas_init BEFORE making any cas calls!
     returns (truth, username [,proxyIOU] )
     """
-    global cas_server_url , cas_service_url , cas_proxy_url , cas_proxy_callback
+    global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
     #Invalid ticket (there is no ticket!)
     if ticket is None:
-        if cas_proxy_url != "":
+        if PROXY_URL != "":
             return (False,"","")
         return (False,"")
-    if cas_proxy_url != "":
-        cas_validate = cas_server_url + "/cas/serviceValidate?ticket=" + ticket + "&service=" + cas_service_url +"&pgtUrl="+cas_proxy_url
+    if PROXY_URL != "":
+        cas_validate = AUTH_SERVER + "/cas/serviceValidate?ticket=" + ticket + "&service=" + SERVICE_URL +"&pgtUrl="+PROXY_URL
     else:
-        cas_validate = cas_server_url + "/cas/serviceValidate?ticket=" + ticket + "&service=" + cas_service_url
+        cas_validate = AUTH_SERVER + "/cas/serviceValidate?ticket=" + ticket + "&service=" + SERVICE_URL
     logging.info("cas_serviceValidate URL:"+cas_validate)
     username = ""
     try:
@@ -95,14 +96,14 @@ def cas_serviceValidate(ticket):
         header,response = h.request(cas_validate)
         username = parse_tag(response,"cas:user")
         logging.info("cas_serviceValidate User:"+username)
-        if cas_proxy_url != "":
+        if PROXY_URL != "":
             pgtIou = parse_tag(response,"cas:proxyGrantingTicket")
             logging.info("cas_serviceValidate PGTIOU:"+pgtIou)
             return (True,username,pgtIou)
         return (True,username)
     except Exception, e:
         logging.error("cas_serviceValidate Exception:"+str(e))
-    if cas_proxy_url != "":
+    if PROXY_URL != "":
         return (False,username,"")
     return (False,username)
 
@@ -110,50 +111,55 @@ def cas_proxy(proxyTicket, targetService=None):
     """
     Calls CAS using proxy to see what user is logged in
     returns true if the user matches parameter 'user' 
-    if empty, the targetService will be filled by cas_proxy_callback
+    if empty, the targetService will be filled by PROXY_CALLBACK_URL
     """
-    global cas_server_url , cas_service_url , cas_proxy_url , cas_proxy_callback
+    global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
     if targetService is None:
-        targetService = cas_proxy_callback
+        targetService = PROXY_CALLBACK_URL
     try:
-        cas_proxy_url = cas_server_url+"/cas/proxy?targetService="+targetService+"&pgt="+proxyTicket
-        logging.info("cas_proxy /proxy URL:"+cas_proxy_url)
+        PROXY_URL = AUTH_SERVER+"/cas/proxy?targetService="+targetService+"&pgt="+proxyTicket
+        logging.info("cas_proxy /proxy URL:"+PROXY_URL)
         conn = httplib2.Http()
-        (head,resp) = conn.request(cas_proxy_url)
+        (head,resp) = conn.request(PROXY_URL)
         casticket = parse_tag(resp,"cas:proxyTicket")
     except Exception, e:
         logging.error("cas_proxy Exception:"+str(e))
         casticket = ""
     return casticket
 
-def cas_proxyValidate(user, casticket, service=None):
+def cas_proxyValidate(casticket, service=None):
     """
     Calls /cas/proxyValidate with 'casticket' from a previous call to /cas/proxy
-    returns true if the user matches parameter 'user' 
-    if empty, OBthe service parameter will be filled by cas_proxy_callback
+    if empty, the service parameter will be filled by PROXY_CALLBACK_URL
+    The CAS user will be returned
     """
-    global cas_server_url , cas_service_url , cas_proxy_url , cas_proxy_callback
+    global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
     if service is None:
-        service = cas_proxy_callback
+        service = PROXY_CALLBACK_URL
     try:
-        cas_valid_url = cas_server_url+"/cas/proxyValidate?ticket="+casticket+"&service="+service
+        cas_valid_url = AUTH_SERVER+"/cas/proxyValidate?ticket="+casticket+"&service="+service
         logging.info("cas_proxyValidate /proxyValidate URL:"+cas_valid_url)
         conn = httplib2.Http()
         (head,resp) = conn.request(cas_valid_url)
         casuser = parse_tag(resp,"cas:user")
     except Exception, e:
         logging.error("cas_proxyValidate Exception:"+str(e))
-        return False
-    return (casuser == user)
+        return "" 
+    return casuser
 
 def cas_reauthenticate(user, proxyTicket):
     """
     Generalizes the CAS proxy for simple reauthentication
-    returns true if the user in the proxyTicket matches the 'user' 
+    returns true if the user in the proxyTicket matches the parameter 'user' 
     """
+    if(user == ""):
+        logging.warn("Invalid User in user parameter. User is required for re-authentication.")
+        return False
     casticket = cas_proxy(proxyTicket)
-    return cas_proxyValidate(user, casticket)
+    #A typical service will pass the 'casticket', then proxyValidate will return authorized user.
+    return (user == cas_proxyValidate(casticket))
 
+#Utiltiy Methods
 def parse_tag(str,tag):
    """
      Common helper method used to extract values from the tags from str
@@ -165,5 +171,5 @@ def parse_tag(str,tag):
    if tag1_pos2 == -1: return ""
    tag2_pos1 = str.find("</" + tag,tag1_pos2)
    if tag2_pos1 == -1: return ""
+   #Extract everything between the tags
    return str[tag1_pos2+1:tag2_pos1].strip()
-
