@@ -60,10 +60,10 @@ import logging
 import httplib2
 
 #Global variables
-AUTH_SERVER = SERVICE_URL = PROXY_URL = PROXY_CALLBACK_URL = ""
+AUTH_SERVER = SERVICE_URL = PROXY_URL = PROXY_CALLBACK_URL = None
 SELF_SIGNED_CERT = False
 
-def cas_init(server_url, service_url, proxy_url='', proxy_callback=''):
+def cas_init(server_url, service_url, proxy_url=None, proxy_callback=None):
   """
   (Optional) Provides a DEFAULT set of commands. 
   At any level these commands can be overridden by passing additional parameters
@@ -72,23 +72,31 @@ def cas_init(server_url, service_url, proxy_url='', proxy_callback=''):
   proxy_url and proxy_callback : Initialize optional proxy re-authentication service
   """
   global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
+  logging.info("CASLIB: init ")
   AUTH_SERVER = server_url
   SERVICE_URL = service_url
-  PROXY_URL = proxy_url if proxy_url is not None else ""
-  PROXY_CALLBACK_URL = proxy_callback if proxy_callback is not None else ""
+  PROXY_URL = proxy_url 
+  PROXY_CALLBACK_URL = proxy_callback 
+  logging.info("CASLIB: init variables: (%s,%s,%s,%s)" % (AUTH_SERVER, SERVICE_URL, PROXY_URL, PROXY_CALLBACK_URL))
 
 #Methods
-def cas_serviceValidate(ticket, auth=AUTH_SERVER, service=SERVICE_URL, proxy=PROXY_URL):
+def cas_serviceValidate(ticket, auth=None, service=None, proxy=None):
     """
     Calls serviceValidate using (ticket)
     Call cas_init BEFORE making any cas calls!
     returns (truth, username [,proxyIOU] )
     """
-    #global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
+    #SET THE CONSTANTS
+    if auth is None:
+        auth=AUTH_SERVER
+    if service is None:
+        service=SERVICE_URL
+    if proxy is None:
+        proxy=PROXY_URL
 
     #Invalid ticket (there is no ticket!)
     if ticket is None:
-        if proxy != "":
+        if proxy is not None:
             return (False,"","")
         return (False,"")
 
@@ -99,7 +107,7 @@ def cas_serviceValidate(ticket, auth=AUTH_SERVER, service=SERVICE_URL, proxy=PRO
         logging.warn("CASLIB: Auth Server missing, use cas_init or set the 'auth' parameter.")
 
     cas_validate = auth + "/cas/serviceValidate?ticket=" + ticket + "&service=" + service
-    if proxy != "":
+    if proxy is not None:
         cas_validate += "&pgtUrl="+ proxy
     logging.info("CASLIB: /serviceValidate URL:"+cas_validate)
     username = ""
@@ -108,23 +116,31 @@ def cas_serviceValidate(ticket, auth=AUTH_SERVER, service=SERVICE_URL, proxy=PRO
         header,response = h.request(cas_validate)
         username = parse_tag(response,"cas:user")
         logging.info("CASLIB: /serviceValidate User:"+username)
-        if proxy != "":
+        if proxy is not None:
             pgtIou = parse_tag(response,"cas:proxyGrantingTicket")
             logging.info("CASLIB: /serviceValidate PGTIOU:"+pgtIou)
             return (True,username,pgtIou)
         return (True,username)
     except Exception, e:
         logging.error("CASLIB: Exception at /serviceValidate:"+str(e))
-    if proxy != "":
+    if proxy is not None:
         return (False,username,"")
     return (False,username)
 
-def cas_proxy(proxyTicket, auth=AUTH_SERVER, targetService=PROXY_CALLBACK_URL, proxy=PROXY_URL):
+def cas_proxy(proxyTicket, auth=None, targetService=None, proxy=None):
     """
     Calls CAS using proxy to see what user is logged in
     returns true if the user matches parameter 'user' 
     if empty, the targetService will be filled by PROXY_CALLBACK_URL
     """
+    #global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
+    if auth is None:
+        auth=AUTH_SERVER
+    if targetService is None:
+        targetService=PROXY_CALLBACK_URL
+    if proxy is None:
+        proxy=PROXY_URL
+
     if proxyTicket is None or proxyTicket is '':
         logging.warn("CASLIB: proxyticket missing.")
         return ""
@@ -148,12 +164,18 @@ def cas_proxy(proxyTicket, auth=AUTH_SERVER, targetService=PROXY_CALLBACK_URL, p
 
     return casticket
 
-def cas_proxyValidate(casticket, auth=AUTH_SERVER, service=PROXY_CALLBACK_URL):
+def cas_proxyValidate(casticket, auth=None, service=None):
     """
     Calls /cas/proxyValidate with 'casticket' from a previous call to /cas/proxy
     if empty, the service parameter will be filled by PROXY_CALLBACK_URL
     The CAS user will be returned
     """
+    #global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
+    if auth is None:
+        auth=AUTH_SERVER
+    if service is None:
+        service=PROXY_CALLBACK_URL
+
     if service is None or service is '':
         logging.warn("CASLIB: service missing, use cas_init or set the 'service' parameter.")
     if auth is None or auth is '':
