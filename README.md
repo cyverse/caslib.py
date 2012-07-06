@@ -29,14 +29,16 @@ If your application requires authenticating the user once, caslib.py is great!
 
         CASLoginURL = https://path.to.cas_server/cas/login?service=https://path.to/CAS_serviceValidater?sendback=/application/  
 
-  NOTE: I use the sendback parameter so that after the user is validated they can be sent to the correct endpoint, depending on your implementation this may or may not be useful.
+  NOTE: The sendback parameter allows you to redirect the authenticated user to the endpoint they selected.  A race condition may occur if multiple users attempt to access multiple endpoints on a website.
 - When your app receives a request with a "ticket" in the query string, CAS is sending you an authenticated user.
 - To validate the ticket:
 
+  ```python
     caslib.cas_init("https://path.to.cas_server","https://path.to/CAS_serviceValidater?sendback=/application/")    
-    (truth,user) = caslib.cas_serviceValidate(request.GET['ticket'])    
+    cas_response = caslib.cas_serviceValidate(request.GET['ticket'])
+    (truth, user, pgtIou) = (cas_response.success, cas_response.map[cas_response.type].get('user',None), cas_response.map[cas_response.type].get('proxyGrantingTicket',""))
     if (truth) redirect(user,sendback) else redirect(CASLoginURL)    
-
+  ```
 RE-AUTHENTICATION BY PROXY
 ==========================
 
