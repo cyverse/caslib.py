@@ -33,7 +33,7 @@ If your application requires authenticating the user once, caslib.py is great!
 - When your app receives a request with a "ticket" in the query string, CAS is sending you an authenticated user.
 - To validate the ticket:
 
-    casinit("https://path.to.cas_server","https://path.to/CAS_serviceValidater?sendback=/application/")    
+    caslib.cas_init("https://path.to.cas_server","https://path.to/CAS_serviceValidater?sendback=/application/")    
     (truth,user) = caslib.cas_serviceValidate(request.GET['ticket'])    
     if (truth) redirect(user,sendback) else redirect(CASLoginURL)    
 
@@ -96,8 +96,9 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
        """
        if not request.GET.has_key('ticket'):
          return HttpResponseRedirect('/')
-       casTuple = caslib.cas_serviceValidate(request.GET['ticket'])
-       (truth, user, pgtIou) = casTuple if len(casTuple) == 3 else (casTuple[0], casTuple[1],"")
+       cas_setReturnLocation(request.GET['sendback'])
+       cas_response = caslib.cas_serviceValidate(request.GET['ticket'])
+       (truth, user, pgtIou) = (cas_response.success, cas_response.map[cas_response.type].get('user',None), cas_response.map[cas_response.type].get('proxyGrantingTicket',""))
        if not truth or not user:
          return HttpResponseRedirect("/")
        if pgtIou and pgtIou != "":
@@ -121,6 +122,7 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
         This is a placeholder for a proxyCallback service, needed for CAS authentication
         """
         return HttpResponse("I am at a RSA-2 or VeriSigned SSL Cert. website, and therefore a valid proxy.")
+
     def login(request):
         """
         CAS Login : Phase 1/3 Call CAS Login

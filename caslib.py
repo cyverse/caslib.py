@@ -8,7 +8,7 @@ Requirements:
   httplib2
 
 Basic Authentication Scenario:
-  * Service wants to authenticate a user with CAS, once.
+  * Service only wants to authenticate once to check a user has validated with CAS 
 
 Basic Usage:
   * Web server acting as CAS Client needs two URLs:
@@ -27,8 +27,8 @@ Advanced Authentication Scenario:
     AND
 
   * After some time, service wants to ensure the same user is CAS authorized
-  * Service has 'authorized'/'protected' areas after initial login that require the user be CAS authorized
-  * Users are authenticated for some time, to get more time they must be CAS authorized
+  * Service has 'authorized'/'protected' areas after initial login that require the user be CAS authenticated
+  * Users are authenticated for some time, to get more time they must be CAS authenticated
   * Any other reason that a service must test user authenticity more than once
 
 Advanced Usage:
@@ -42,8 +42,8 @@ Advanced Usage:
     SERVICE_URL - The request landing at this URL will have a ticket in the query string (GET), passed from CAS server.
                       This page should call 'serviceValidate' 
                       This page should match:
-                        (User,IOU) from serviceValidate
-                       to (IOU,ID) from PROXY_URL 
+                         (User,IOU) from serviceValidate
+                      to (IOU, ID ) from PROXY_URL 
                       The SERVICE_URL should always redirect user to the correct locations depending on CAS validation.
 
     PROXY_CALLBACK_URL - This is a dummy URL, required by CAS server. 
@@ -56,6 +56,7 @@ Advanced Usage:
   * To programmatically determine user re-authorization: pass the last recorded proxyTicket for user to cas_proxyValidate(user, proxyTicket):
     
 """
+from xml.dom.minidom import parse, parseString
 import logging
 import httplib2
 
@@ -72,19 +73,21 @@ def cas_init(server_url, service_url, proxy_url=None, proxy_callback=None):
   proxy_url and proxy_callback : Initialize optional proxy re-authentication service
   """
   global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
-  logging.info("CASLIB: init ")
   AUTH_SERVER = server_url
   SERVICE_URL = service_url
   PROXY_URL = proxy_url 
   PROXY_CALLBACK_URL = proxy_callback 
-  logging.info("CASLIB: init variables: (%s,%s,%s,%s)" % (AUTH_SERVER, SERVICE_URL, PROXY_URL, PROXY_CALLBACK_URL))
+
+def cas_setServiceURL(service_url):
+  global SERVICE_URL
+  SERVICE_URL= service_url 
 
 #Methods
 def cas_serviceValidate(ticket, auth=None, service=None, proxy=None):
     """
     Calls serviceValidate using (ticket)
     Call cas_init BEFORE making any cas calls!
-    returns (truth, username [,proxyIOU] )
+    returns cas_response
     """
     #SET THE CONSTANTS
     if auth is None:
@@ -104,28 +107,13 @@ def cas_serviceValidate(ticket, auth=None, service=None, proxy=None):
     if service is None or service is '':
         logging.warn("CASLIB: service missing, use cas_init or set the 'service' parameter.")
     if auth is None or auth is '':
-        logging.warn("CASLIB: Auth Server missing, use cas_init or set the 'auth' parameter.")
+        logging.warn("CASLIB: Auth Server missing, use cas_init or set the 'server' parameter.")
 
     cas_validate = auth + "/cas/serviceValidate?ticket=" + ticket + "&service=" + service
     if proxy is not None:
         cas_validate += "&pgtUrl="+ proxy
     logging.info("CASLIB: /serviceValidate URL:"+cas_validate)
-    username = ""
-    try:
-        h = httplib2.Http(disable_ssl_certificate_validation=SELF_SIGNED_CERT)#TODO:Remove on PROD
-        header,response = h.request(cas_validate)
-        username = parse_tag(response,"cas:user")
-        logging.info("CASLIB: /serviceValidate User:"+username)
-        if proxy is not None:
-            pgtIou = parse_tag(response,"cas:proxyGrantingTicket")
-            logging.info("CASLIB: /serviceValidate PGTIOU:"+pgtIou)
-            return (True,username,pgtIou)
-        return (True,username)
-    except Exception, e:
-        logging.error("CASLIB: Exception at /serviceValidate:"+str(e))
-    if proxy is not None:
-        return (False,username,"")
-    return (False,username)
+    return cas_callHTTP(cas_validate)
 
 def cas_proxy(proxyTicket, auth=None, targetService=None, proxy=None):
     """
@@ -151,18 +139,10 @@ def cas_proxy(proxyTicket, auth=None, targetService=None, proxy=None):
         logging.warn("CASLIB: targetService missing, use cas_init or set the 'targetService' parameter.")
     if proxy is None or proxy is '':
         logging.warn("CASLIB: proxy missing, use cas_init or set the 'proxy' parameter.")
-
-    try:
-        proxy = auth+"/cas/proxy?targetService="+targetService+"&pgt="+proxyTicket
-        logging.info("CASLIB: /proxy URL:"+proxy)
-        conn = httplib2.Http(disable_ssl_certificate_validation=SELF_SIGNED_CERT)
-        (head,resp) = conn.request(proxy)
-        casticket = parse_tag(resp,"cas:proxyTicket")
-    except Exception, e:
-        logging.error("CASLIB: Exception at /proxy:"+str(e))
-        casticket = ""
-
-    return casticket
+    
+    proxy = auth+"/cas/proxy?targetService="+targetService+"&pgt="+proxyTicket
+    logging.info("CASLIB: /proxy URL:"+proxy)
+    return cas_callHTTP(proxy)
 
 def cas_proxyValidate(casticket, auth=None, service=None):
     """
@@ -181,16 +161,9 @@ def cas_proxyValidate(casticket, auth=None, service=None):
     if auth is None or auth is '':
         logging.warn("CASLIB: Auth Server missing, use cas_init or set the 'auth' parameter.")
 
-    try:
-        cas_valid_url = auth+"/cas/proxyValidate?ticket="+casticket+"&service="+service
-        logging.info("CASLIB: /proxyValidate URL:"+cas_valid_url)
-        conn = httplib2.Http(disable_ssl_certificate_validation=SELF_SIGNED_CERT)
-        (head,resp) = conn.request(cas_valid_url)
-        casuser = parse_tag(resp,"cas:user")
-    except Exception, e:
-        logging.error("CASLIB: Exception at /proxyValidate:"+str(e))
-        return "" 
-    return casuser
+    cas_valid_url = auth+"/cas/proxyValidate?ticket="+casticket+"&service="+service
+    logging.info("CASLIB: /proxyValidate URL:"+cas_valid_url)
+    return cas_callHTTP(cas_valid_url)
 
 def cas_reauthenticate(user, proxyTicket):
     """
@@ -204,21 +177,70 @@ def cas_reauthenticate(user, proxyTicket):
         logging.warn("CASLIB: proxyTicket missing")
         return False
 
-    casticket = cas_proxy(proxyTicket)
-    #A typical service will pass the 'casticket', then proxyValidate will return authorized user.
-    return (user == cas_proxyValidate(casticket))
+    proxy_response = cas_proxy(proxyTicket)
+    casticket = proxy_response.map[proxy_response.type].get('proxyTicket','')
+    logging.info("CAS Ticket:"+casticket)
+
+    pv_response = cas_proxyValidate(casticket)
+    proxyUser = pv_response.map[pv_response.type].get('user','')
+    logging.info("CAS ProxyUser:"+proxyUser)
+
+    return (user == proxyUser)
 
 #Utiltiy Methods
-def parse_tag(str,tag):
-   """
-     Common helper method used to extract values from the tags from str
-   """
-   tag1_pos1 = str.find("<" + tag)
-   #  No tag found, return empty string.
-   if tag1_pos1 == -1: return ""
-   tag1_pos2 = str.find(">",tag1_pos1)
-   if tag1_pos2 == -1: return ""
-   tag2_pos1 = str.find("</" + tag,tag1_pos2)
-   if tag2_pos1 == -1: return ""
-   #Extract everything between the tags
-   return str[tag1_pos2+1:tag2_pos1].strip()
+
+def cas_callHTTP(url):
+    try:
+        conn = httplib2.Http(disable_ssl_certificate_validation=SELF_SIGNED_CERT)
+        (head,resp) = conn.request(url)
+        return CASResponse(resp)
+    except Exception, e:
+        logging.error("CASLIB: Exception at /proxyValidate:"+str(e))
+        return None
+
+def parseCASResponse(response):
+  casType = "NoResponse"
+  xmlDict = {}
+  if response is None or len(response) == 0:
+    return (response, casType, xmlDict)
+  try:
+    doc = parseString(response)
+    nodeEl = doc.documentElement
+    if nodeEl.nodeName != 'cas:serviceResponse':
+      raise Exception("Parsing CAS Response failed. Expected cas:serviceResponse as head element in XML response.")
+    #First level, find out what type of CAS call it is
+    for child in nodeEl.childNodes:
+      if child.nodeType == child.ELEMENT_NODE:
+        casNode = child
+        casType = child.nodeName.replace("cas:","")
+    #Grab relevant info from remaining XML
+    xmlDict = xml2dict(casNode)
+  except Exception, e:
+    logging.warn(str(e))
+
+  logging.info(response)
+  logging.info('-->')
+  logging.info(xmlDict)
+  return (response, casType, xmlDict)
+
+def xml2dict(tag):
+    """
+    Recursively create python dict's to replace the nested XML structure
+    """
+    nodeDict = {}
+    tagName = tag.nodeName.replace("cas:","")
+    for child in tag.childNodes:
+        if child.nodeType == child.TEXT_NODE:
+            text = child.nodeValue
+            if len(text.strip()) > 0:
+                nodeDict = {tagName : text.strip()}
+                print "text",nodeDict
+        elif child.nodeType == child.ELEMENT_NODE:
+            children = xml2dict(child)
+            nodeDict[tagName] = dict(nodeDict.get(tagName,{}).items() + children.items())
+    return nodeDict
+
+class CASResponse:
+  def __init__(self, response=None):
+    (self.xml, self.type, self.map) = parseCASResponse(response)
+    self.success = "success" in self.type.lower()
