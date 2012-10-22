@@ -185,7 +185,7 @@ def cas_reauthenticate(user, proxyTicket):
     proxyUser = pv_response.map[pv_response.type].get('user','')
     logging.info("CAS ProxyUser:"+proxyUser)
 
-    return (user == proxyUser)
+    return ((user == proxyUser),pv_response.map)
 
 #Utiltiy Methods
 
