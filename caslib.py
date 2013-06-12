@@ -183,7 +183,8 @@ def cas_reauthenticate(user, proxyTicket):
 
     pv_response = cas_proxyValidate(casticket)
     proxyUser = pv_response.map[pv_response.type].get('user','')
-    logging.info("CAS ProxyUser:"+proxyUser)
+    logging.info("CAS Ticket:%s CAS ProxyUser:%s User Tested: %s" %
+                 (casticket, proxyUser))
 
     return ((user == proxyUser),pv_response)
 
@@ -218,9 +219,6 @@ def parseCASResponse(response):
   except Exception, e:
     logging.warn(str(e))
 
-  logging.info(response)
-  logging.info('-->')
-  logging.info(xmlDict)
   return (response, casType, xmlDict)
 
 def xml2dict(tag):
