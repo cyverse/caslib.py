@@ -141,7 +141,6 @@ def cas_proxy(proxyTicket, auth=None, targetService=None, proxy=None):
         logging.warn("CASLIB: proxy missing, use cas_init or set the 'proxy' parameter.")
     
     proxy = auth+"/cas/proxy?targetService="+targetService+"&pgt="+proxyTicket
-    logging.info("CASLIB: /proxy URL:"+proxy)
     return cas_callHTTP(proxy)
 
 def cas_proxyValidate(casticket, auth=None, service=None):
@@ -162,7 +161,6 @@ def cas_proxyValidate(casticket, auth=None, service=None):
         logging.warn("CASLIB: Auth Server missing, use cas_init or set the 'auth' parameter.")
 
     cas_valid_url = auth+"/cas/proxyValidate?ticket="+casticket+"&service="+service
-    logging.info("CASLIB: /proxyValidate URL:"+cas_valid_url)
     return cas_callHTTP(cas_valid_url)
 
 def cas_reauthenticate(user, proxyTicket):
@@ -179,12 +177,11 @@ def cas_reauthenticate(user, proxyTicket):
 
     proxy_response = cas_proxy(proxyTicket)
     casticket = proxy_response.map[proxy_response.type].get('proxyTicket','')
-    logging.info("CAS Ticket:"+casticket)
 
     pv_response = cas_proxyValidate(casticket)
     proxyUser = pv_response.map[pv_response.type].get('user','')
     logging.info("CAS Ticket:%s CAS ProxyUser:%s User Tested: %s" %
-                 (casticket, proxyUser))
+                 (casticket, proxyUser, user))
 
     return ((user == proxyUser),pv_response)
 
