@@ -10,7 +10,7 @@ def get_requirements(file_name):
 """
     
 setup(name='caslib',
-      version='1.02',
+      version='1.0.3',
       description='CAS Client library',
       author='Steven Gregory',
       author_email='esteve@iplantcollaborative.org',
