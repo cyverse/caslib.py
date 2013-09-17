@@ -64,7 +64,8 @@ import httplib2
 AUTH_SERVER = SERVICE_URL = PROXY_URL = PROXY_CALLBACK_URL = None
 SELF_SIGNED_CERT = False
 
-def cas_init(server_url, service_url, proxy_url=None, proxy_callback=None):
+def cas_init(server_url, service_url, proxy_url=None, proxy_callback=None,
+             self_signed_cert=False):
   """
   (Optional) Provides a DEFAULT set of commands. 
   At any level these commands can be overridden by passing additional parameters
@@ -72,11 +73,13 @@ def cas_init(server_url, service_url, proxy_url=None, proxy_callback=None):
   server_url, service_url : Initializes caslib authentication service
   proxy_url and proxy_callback : Initialize optional proxy re-authentication service
   """
-  global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
+  global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL ,\
+         SELF_SIGNED_CERT
   AUTH_SERVER = server_url
   SERVICE_URL = service_url
   PROXY_URL = proxy_url 
   PROXY_CALLBACK_URL = proxy_callback 
+  SELF_SIGNED_CERT = self_signed_cert
 
 def cas_setServiceURL(service_url):
   global SERVICE_URL
@@ -193,7 +196,7 @@ def cas_callHTTP(url):
         (head,resp) = conn.request(url)
         return CASResponse(resp)
     except Exception, e:
-        logging.error("CASLIB: Exception at /proxyValidate:"+str(e))
+        logging.exception("CASLIB: Error retrieving a response")
         return None
 
 def parseCASResponse(response):
