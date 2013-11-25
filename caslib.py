@@ -59,7 +59,6 @@ Advanced Usage:
 from xml.dom.minidom import parse, parseString
 import logging
 import httplib2
-
 #Global variables
 AUTH_SERVER = SERVICE_URL = PROXY_URL = PROXY_CALLBACK_URL = None
 SELF_SIGNED_CERT = False
@@ -172,20 +171,52 @@ def cas_reauthenticate(user, proxyTicket):
     returns true if the user in the proxyTicket matches the parameter 'user' 
     """
     if user is None or user is "":
-        logging.warn("CASLIB: User missing")
-        return False
+        logging.warn("CASLIB: User missing, cannot reauthenticate.")
+        return (False, None)
     if proxyTicket is None or proxyTicket is "":
-        logging.warn("CASLIB: proxyTicket missing")
-        return False
+        logging.warn("CASLIB: proxyTicket missing, cannot reauthenticate.")
+        return (False, None)
 
     proxy_response = cas_proxy(proxyTicket)
-    casticket = proxy_response.map[proxy_response.type].get('proxyTicket','')
-
+    proxy_obj = proxy_response.map[proxy_response.type]
+    if isinstance(proxy_obj,dict):
+      
+        casticket = proxy_obj.get('proxyTicket','')
+    else:
+        logging.error("Proxy Object DOES NOT MATCH. "
+                     "This will require a manual check "
+                     "that response.type(%s) matches the key in "
+                     "response.map(%s)"
+                     % (proxy_response.type, proxy_response.map))
+        casticket = ''
+    if not casticket:
+        logging.error("Proxy Object MISSING TICKET! "
+                      "This will require a manual check "
+                      "that proxy_obj(%s) contains 'proxyTicket'"
+                      % proxy_obj)
+        return (False, proxy_response)
+    #Validate the ticket -- Is it authentic?
     pv_response = cas_proxyValidate(casticket)
-    proxyUser = pv_response.map[pv_response.type].get('user','')
-    logging.info("CAS Ticket:%s CAS ProxyUser:%s User Tested: %s" %
-                 (casticket, proxyUser, user))
+    validate_obj = pv_response.map[pv_response.type]
 
+    #Authentic tickets will provide the username the ticket belongs to
+    if isinstance(validate_obj,dict):
+        proxyUser = validate_obj.get('user','')
+    else:
+        logging.error("ProxyValidate Object DOES NOT MATCH. "
+                     "This will require a manual check "
+                     "that response.type(%s) matches the key in "
+                     "response.map(%s)"
+                     % (pv_response.type, pv_response.map))
+    if not proxyUser:
+        logging.error("ProxyValidate Object MISSING USER! "
+                      "This will require a manual check "
+                      "that proxy_obj(%s) contains 'user'"
+                      % proxy_obj)
+        return (False, pv_response)
+
+    logging.info("CAS Ticket:%s CAS ProxyUser:%s User Tested: %s"
+                 % (casticket, proxyUser, user))
     return ((user == proxyUser),pv_response)
 
 #Utiltiy Methods
@@ -232,7 +263,7 @@ def xml2dict(tag):
             text = child.nodeValue
             if len(text.strip()) > 0:
                 nodeDict = {tagName : text.strip()}
-                print "text",nodeDict
+                logging.info("text",nodeDict)
         elif child.nodeType == child.ELEMENT_NODE:
             children = xml2dict(child)
             nodeDict[tagName] = dict(nodeDict.get(tagName,{}).items() + children.items())
