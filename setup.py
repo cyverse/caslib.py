@@ -16,5 +16,5 @@ setup(name='caslib',
       author_email='esteve@iplantcollaborative.org',
       url='https://github.com/iPlantCollaborativeOpenSource/caslib.py',
       py_modules=['caslib'],
-      #install_requires = get_requirements('requirements.txt'),
+      install_requires = ['httplib2 >= 0.8, < 0.9'],
      )
