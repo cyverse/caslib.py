@@ -10,11 +10,11 @@ def get_requirements(file_name):
 """
     
 setup(name='caslib',
-      version='1.0.3',
+      version='2.0.0',
       description='CAS Client library',
       author='Steven Gregory',
-      author_email='esteve@iplantcollaborative.org',
+      author_email='sgregory@iplantcollaborative.org',
       url='https://github.com/iPlantCollaborativeOpenSource/caslib.py',
       py_modules=['caslib'],
-      install_requires = ['httplib2 >= 0.8, < 0.9'],
+      install_requires = ['requests == 2.2.0'],
      )
