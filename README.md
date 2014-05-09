@@ -4,21 +4,21 @@ CASLIB.PY
 A CAS authentication library written in python using httplib2  
 
 _Requirements_
-- httplib2
+- requests
 - CAS Server
 
 AUTHOR
 ======
-Steven Gregory - iPlant Collaborative (C) 2012  
-CONTACT: esteve@iplantcollaborative.org  
+Steven Gregory - iPlant Collaborative © 2012-2014
+CONTACT: sgregory@iplantcollaborative.org  
 
 
 ABOUT CASLIB.PY
 =================
 caslib.py was initially developed for Atmosphere, an AJAX based web application for iPlant Collaborative.  
 caslib.py serves two functions:
-1. Validating a ticket after a CAS login (see BASIC AUTHENTICATION)
-2. Validating a proxyTicket and it's associated user (see RE-AUTHENTICATION BY PROXY)
+1. Validating a ticket after a CAS login (aka BASIC AUTHENTICATION)
+2. Validating a proxyTicket and it's associated user (aka RE-AUTHENTICATION BY PROXY)
 
 BASIC AUTHENTICATION
 ====================
@@ -57,13 +57,11 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
 
 ###settings.py###
   ```python
-    ##CASLIB
-    import caslib
+    ##These settings will be used often
     CAS_SERVER = "https://path.to.cas_server"
     SERVICE_URL = "https://path.to/CAS_serviceValidater?sendback=/application/"
     PROXY_URL = "https://path.to/CAS_proxyUrl"
     PROXY_CALLBACK_URL = "https://path.to/CAS_proxyCallback"
-    caslib.cas_init(CAS_SERVER, SERVICE_URL, PROXY_URL, PROXY_CALLBACK_URL)
   ```
 
 ###models.py###
@@ -89,25 +87,70 @@ Below is an example of the settings, urls.py, views.py, and models.py that are r
 
 ###views.py###
   ```python
-   def cas_validateTicket(request):
+   def get_cas_client():
        """
-       CAS Login : Phase 2/3 After returning from a CAS Login, this request will contain a ticket
-       cas_serviceValidate is called to validate the user's ticket
-       and the user is returned to 'sendback' (Authorized) or 'login' (Unauthorized) screen
-       (Optional - Phase 3/3 - With the username and proxyTicket, a user can be re-authorized.)
+       This is how you initialize a CAS Client
        """
-       if not request.GET.has_key('ticket'):
-         return HttpResponseRedirect('/')
-       cas_setReturnLocation(request.GET['sendback'])
-       cas_response = caslib.cas_serviceValidate(request.GET['ticket'])
-       (truth, user, pgtIou) = (cas_response.success, cas_response.map[cas_response.type].get('user',None), cas_response.map[cas_response.type].get('proxyGrantingTicket',""))
-       if not truth or not user:
-         return HttpResponseRedirect("/")
-       if pgtIou and pgtIou != "":
-         userProxy = UserProxy.objects.get(proxyIOU=pgtIou)
-         userProxy.username = user
-         userProxy.save()
-       return HttpResponseRedirect(request.GET['sendback']) if getToken(request,request.META['HTTP_X_AUTH_USER'],None) else HttpResponseRedirect("/")
+       return CASClient(settings.CAS_SERVER,
+               settings.SERVICE_URL,
+               proxy_url=settings.PROXY_URL,
+               proxy_callback=settings.PROXY_CALLBACK_URL,
+               self_signed_cert=settings.SELF_SIGNED_CERT)
+    def cas_validateTicket(request):
+        """
+        Method expects 2 GET parameters: 'ticket' & 'sendback'
+        After a CAS Login:
+        Redirects the request based on the GET param 'ticket'
+        Unauthorized Users are redirected to '/' In the event of failure.
+        Authorized Users are redirected to the GET param 'sendback'
+        """
+    
+        redirect_logout_url = settings.REDIRECT_URL+"/login/"
+        no_user_url = settings.REDIRECT_URL + "/no_user/"
+        logger.debug('GET Variables:%s' % request.GET)
+        ticket = request.GET.get('ticket', None)
+        sendback = request.GET.get('sendback', None)
+    
+        if not ticket:
+            logger.info("No Ticket received in GET string "
+                        "-- Logout user: %s" % redirect_logout_url)
+            return HttpResponseRedirect(redirect_logout_url)
+    
+        logger.debug("ServiceValidate endpoint includes a ticket."
+                     " Ticket must now be validated with CAS")
+    
+        # ReturnLocation set, apply on successful authentication
+    
+        caslib = get_cas_client()
+        caslib.service_url = _set_redirect_url(sendback, request)
+    
+        cas_response = caslib.cas_serviceValidate(ticket)
+        if not cas_response.success:
+            logger.debug("CAS Server did NOT validate ticket:%s"
+                         " and included this response:%s"
+                         % (ticket, cas_response.object))
+            return HttpResponseRedirect(redirect_logout_url)
+        (user, pgtIou) = parse_cas_response(cas_response)
+    
+        if not user:
+            logger.debug("User attribute missing from cas response!"
+                         "This may require a fix to caslib.py")
+            return HttpResponseRedirect(redirect_logout_url)
+        if not pgtIou or pgtIou == "":
+            logger.error("""Proxy Granting Ticket missing!
+                Possible Causes:
+                  * ServerName variable is wrong in /etc/apache2/apache2.conf
+                  * Proxy URL does not exist
+                  * Proxy URL is not a valid RSA-2/VeriSigned SSL certificate
+                  * /etc/host and hostname do not match machine.""")
+            return HttpResponseRedirect(redirect_logout_url)
+    
+        updated = updateUserProxy(user, pgtIou)
+        if not updated:
+            return HttpResponseRedirect(redirect_logout_url)
+        logger.info("Updated proxy for <%s> -- Auth success!" % user)
+        logger.info("Create tokens, do stuff, return to: %s" % return_to)
+        return HttpResponseRedirect(return_to)
 
     def cas_storeProxyIOU_ID(request):
         """

@@ -5,7 +5,6 @@ Contact: esteve <esteve@iplantcollaborative.org>
 
 Requirements:
   CAS 2.0+ Server
-  httplib2
 
 Basic Authentication Scenario:
   * Service only wants to authenticate once to check a user has validated with CAS 
@@ -75,13 +74,14 @@ class CASClient():
         self.proxy_callback = proxy_callback
         self.self_signed_cert = self_signed_cert
 
-    def cas_callHTTP(self, url):
+    def get_cas_response(self, url):
         try:
             response = requests.get(url, verify=self.self_signed_cert)
             return CASResponse(response.text)
         except Exception, e:
             logging.exception("CASLIB: Error retrieving a response")
-            raise#return None
+            return None
+
 
     def _service_validate_url(self, ticket):
         return "%s/cas/serviceValidate?ticket=%s&service=%s%s"\
@@ -92,10 +92,8 @@ class CASClient():
                % (self.server_url, self.proxy_callback, ticket)
     def _proxy_validate_url(self, ticket):
         return "%s/cas/proxyValidate?ticket=%s&service=%s"\
-               % (self.server_url, ticket, self.service_url)
-    #cas_validate = auth + "/cas/serviceValidate?ticket=" + ticket + "&service=" + service + "&pgtUrl="+ proxy
-    #proxy = auth+"/cas/proxy?targetService="+targetService+"&pgt="+proxyTicket
-    #cas_valid_url = auth+"/cas/proxyValidate?ticket="+casticket+"&service="+service
+               % (self.server_url, ticket, self.proxy_callback)
+
     #Methods
     def cas_serviceValidate(self, ticket):
         """
@@ -110,7 +108,7 @@ class CASClient():
         #Use defaults if not set
         cas_validate_url = self._service_validate_url(ticket)
         logging.info("CASLIB: /serviceValidate URL:"+cas_validate_url)
-        return self.cas_callHTTP(cas_validate_url)
+        return self.get_cas_response(cas_validate_url)
 
     def cas_proxy(self, proxy_ticket):
         """
@@ -122,9 +120,9 @@ class CASClient():
             raise Exception(
                     "Conflict: Client is not initialized with a proxy callback URL")
         proxy_url = self._proxy_url(proxy_ticket)
-        return self.cas_callHTTP(proxy_url)
+        return self.get_cas_response(proxy_url)
 
-    def cas_proxyValidate(proxied_serviceticket, auth=None, service=None):
+    def cas_proxyValidate(self, proxied_serviceticket):
         """
         Calls /cas/proxyValidate with the service ticket obtained from a call to cas_proxy
         The CAS user will be returned
@@ -133,275 +131,120 @@ class CASClient():
             raise Exception(
                     "Conflict: Client is not initialized with a proxy URL")
         cas_valid_url = self._proxy_validate_url(proxied_serviceticket)
-        return self.cas_callHTTP(cas_valid_url)
+        return self.get_cas_response(cas_valid_url)
     
-    def cas_reauthenticate(self, user, proxyTicket):
+    #Composite methods
+    def reauthenticate(self, proxyGrantingTicket, username=None):
         """
         Generalizes the CAS proxy for simple reauthentication
-        returns true if the user in the proxyTicket matches the parameter 'user' 
+        PARAMS:
+        * proxyGrantingTicket - A ticket we can use to reauthenticate, if it is valid.
+        * username - If the PGT is valid and its ticket produces a user, that
+                     user must match the username to be a validTicket
+        RETURNS:
+        (validTicket, response)
         """
-        if not user:
-            logging.warn("CASLIB: User missing, cannot reauthenticate.")
+        if not proxyGrantingTicket:
+            logging.warn("CASLIB: proxyGrantingTicket missing, cannot reauthenticate.")
             return (False, None)
-        if not proxyTicket:
-            logging.warn("CASLIB: proxyTicket missing, cannot reauthenticate.")
-            return (False, None)
-        proxy_response = self.cas_proxy(proxyTicket)
-        proxy_obj = proxy_response.map[proxy_response.type]
-        if isinstance(proxy_obj,dict):
-            casticket = proxy_obj.get('proxyTicket','')
-        else:
-            logging.error("Proxy Object DOES NOT MATCH. "
-                         "This will require a manual check "
-                         "that response.type(%s) matches the key in "
-                         "response.map(%s)"
+        proxy_response = self.cas_proxy(proxyGrantingTicket)
+        if not proxy_response.object:
+            raise Exception("Proxy Object DOES NOT MATCH."
+                         " This will require a manual check"
+                         " that response.type(%s) is an EXACT key match"
+                         " to the key found in response.map:%s"
                          % (proxy_response.type, proxy_response.map))
-            casticket = ''
-        if not casticket:
+        elif isinstance(proxy_response.object, str):
+            logger.error("ERROR on /proxy: Server returned:%s" % (proxy_response.object,))
+            return (False, proxy_response)
+        if not proxy_response.proxy_ticket:
             logging.error("Proxy Object MISSING TICKET! "
                           "This will require a manual check "
-                          "that proxy_obj(%s) contains 'proxyTicket'"
-                          % proxy_obj)
+                          "that the response object (%s) contains 'proxyTicket'"
+                          % proxy_response.object)
             return (False, proxy_response)
         #Validate the ticket -- Is it authentic?
-        pv_response = self.cas_proxyValidate(casticket)
-        validate_obj = pv_response.map[pv_response.type]
+        validate_response = self.cas_proxyValidate(proxy_response.proxy_ticket)
     
         #Authentic tickets will provide the username the ticket belongs to
-        if isinstance(validate_obj,dict):
-            proxyUser = validate_obj.get('user','')
-        else:
-            logging.error("ProxyValidate Object DOES NOT MATCH. "
-                         "This will require a manual check "
-                         "that response.type(%s) matches the key in "
-                         "response.map(%s)"
-                         % (pv_response.type, pv_response.map))
-        if not proxyUser:
-            logging.error("ProxyValidate Object MISSING USER! "
-                          "This will require a manual check "
-                          "that proxy_obj(%s) contains 'user'"
-                          % proxy_obj)
-            return (False, pv_response)
+        if not validate_response.object:
+            raise Exception("ProxyValidate Object DOES NOT MATCH."
+                         " This will require a manual check"
+                         " that response.type(%s) is an EXACT key match"
+                         " to the key found in response.map:%s"
+                         % (validate_response.type, validate_response.map))
+        elif isinstance(validate_response.object,str):
+            raise Exception("ERROR on /proxyValidate: Server returned:%s"
+            % (validate_response.object,))
+        elif not validate_response.user:
+            logging.error("Object is missing 'user' attribute."
+                          "Update the CAS client with the associated value"
+                          "found in this object: %s"
+                         % (validate_response.object))
+            return (False, validate_response)
     
         logging.info("CAS Ticket:%s CAS ProxyUser:%s User Tested: %s"
-                     % (casticket, proxyUser, user))
-        return ((user == proxyUser),pv_response)
-### All below this line will be deprecated//Old version..
-import httplib2
-
-
-#Global variables
-AUTH_SERVER = SERVICE_URL = PROXY_URL = PROXY_CALLBACK_URL = None
-SELF_SIGNED_CERT = False
-
-def cas_init(server_url, service_url, proxy_url=None, proxy_callback=None,
-             self_signed_cert=False):
-  """
-  (Optional) Provides a DEFAULT set of commands. 
-  At any level these commands can be overridden by passing additional parameters
-
-  server_url, service_url : Initializes caslib authentication service
-  proxy_url and proxy_callback : Initialize optional proxy re-authentication service
-  """
-  global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL ,\
-         SELF_SIGNED_CERT
-  AUTH_SERVER = server_url
-  SERVICE_URL = service_url
-  PROXY_URL = proxy_url 
-  PROXY_CALLBACK_URL = proxy_callback 
-  SELF_SIGNED_CERT = self_signed_cert
-
-def cas_setServiceURL(service_url):
-  global SERVICE_URL
-  SERVICE_URL= service_url 
-
-#Methods
-def cas_serviceValidate(ticket, auth=None, service=None, proxy=None):
-    """
-    Calls serviceValidate using (ticket)
-    Call cas_init BEFORE making any cas calls!
-    returns cas_response
-    """
-    #SET THE CONSTANTS
-    if auth is None:
-        auth=AUTH_SERVER
-    if service is None:
-        service=SERVICE_URL
-    if proxy is None:
-        proxy=PROXY_URL
-
-    #Invalid ticket (there is no ticket!)
-    if ticket is None:
-        if proxy is not None:
-            return (False,"","")
-        return (False,"")
-
-    #Use defaults if not set
-    if service is None or service is '':
-        logging.warn("CASLIB: service missing, use cas_init or set the 'service' parameter.")
-    if auth is None or auth is '':
-        logging.warn("CASLIB: Auth Server missing, use cas_init or set the 'server' parameter.")
-
-    cas_validate = auth + "/cas/serviceValidate?ticket=" + ticket + "&service=" + service
-    if proxy is not None:
-        cas_validate += "&pgtUrl="+ proxy
-    logging.info("CASLIB: /serviceValidate URL:"+cas_validate)
-    return cas_callHTTP(cas_validate)
-
-def cas_proxy(proxyTicket, auth=None, targetService=None, proxy=None):
-    """
-    Calls CAS using proxy to see what user is logged in
-    returns true if the user matches parameter 'user' 
-    if empty, the targetService will be filled by PROXY_CALLBACK_URL
-    """
-    #global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
-    if auth is None:
-        auth=AUTH_SERVER
-    if targetService is None:
-        targetService=PROXY_CALLBACK_URL
-    if proxy is None:
-        proxy=PROXY_URL
-
-    if proxyTicket is None or proxyTicket is '':
-        logging.warn("CASLIB: proxyticket missing.")
-        return ""
-
-    if auth is None or auth is '':
-        logging.warn("CASLIB: Auth Server missing, use cas_init or set the 'auth' parameter.")
-    if targetService is None or targetService is '':
-        logging.warn("CASLIB: targetService missing, use cas_init or set the 'targetService' parameter.")
-    if proxy is None or proxy is '':
-        logging.warn("CASLIB: proxy missing, use cas_init or set the 'proxy' parameter.")
-    
-    proxy = auth+"/cas/proxy?targetService="+targetService+"&pgt="+proxyTicket
-    return cas_callHTTP(proxy)
-
-def cas_proxyValidate(casticket, auth=None, service=None):
-    """
-    Calls /cas/proxyValidate with 'casticket' from a previous call to /cas/proxy
-    if empty, the service parameter will be filled by PROXY_CALLBACK_URL
-    The CAS user will be returned
-    """
-    #global AUTH_SERVER , SERVICE_URL , PROXY_URL , PROXY_CALLBACK_URL
-    if auth is None:
-        auth=AUTH_SERVER
-    if service is None:
-        service=PROXY_CALLBACK_URL
-
-    if service is None or service is '':
-        logging.warn("CASLIB: service missing, use cas_init or set the 'service' parameter.")
-    if auth is None or auth is '':
-        logging.warn("CASLIB: Auth Server missing, use cas_init or set the 'auth' parameter.")
-
-    cas_valid_url = auth+"/cas/proxyValidate?ticket="+casticket+"&service="+service
-    return cas_callHTTP(cas_valid_url)
-
-def cas_reauthenticate(user, proxyTicket):
-    """
-    Generalizes the CAS proxy for simple reauthentication
-    returns true if the user in the proxyTicket matches the parameter 'user' 
-    """
-    if user is None or user is "":
-        logging.warn("CASLIB: User missing, cannot reauthenticate.")
-        return (False, None)
-    if proxyTicket is None or proxyTicket is "":
-        logging.warn("CASLIB: proxyTicket missing, cannot reauthenticate.")
-        return (False, None)
-
-    proxy_response = cas_proxy(proxyTicket)
-    proxy_obj = proxy_response.map[proxy_response.type]
-    if isinstance(proxy_obj,dict):
-      
-        casticket = proxy_obj.get('proxyTicket','')
-    else:
-        logging.error("Proxy Object DOES NOT MATCH. "
-                     "This will require a manual check "
-                     "that response.type(%s) matches the key in "
-                     "response.map(%s)"
-                     % (proxy_response.type, proxy_response.map))
-        casticket = ''
-    if not casticket:
-        logging.error("Proxy Object MISSING TICKET! "
-                      "This will require a manual check "
-                      "that proxy_obj(%s) contains 'proxyTicket'"
-                      % proxy_obj)
-        return (False, proxy_response)
-    #Validate the ticket -- Is it authentic?
-    pv_response = cas_proxyValidate(casticket)
-    validate_obj = pv_response.map[pv_response.type]
-
-    #Authentic tickets will provide the username the ticket belongs to
-    if isinstance(validate_obj,dict):
-        proxyUser = validate_obj.get('user','')
-    else:
-        logging.error("ProxyValidate Object DOES NOT MATCH. "
-                     "This will require a manual check "
-                     "that response.type(%s) matches the key in "
-                     "response.map(%s)"
-                     % (pv_response.type, pv_response.map))
-    if not proxyUser:
-        logging.error("ProxyValidate Object MISSING USER! "
-                      "This will require a manual check "
-                      "that proxy_obj(%s) contains 'user'"
-                      % proxy_obj)
-        return (False, pv_response)
-
-    logging.info("CAS Ticket:%s CAS ProxyUser:%s User Tested: %s"
-                 % (casticket, proxyUser, user))
-    return ((user == proxyUser),pv_response)
-
-#Utiltiy Methods
-
-def cas_callHTTP(url):
-    try:
-        conn = httplib2.Http(disable_ssl_certificate_validation=SELF_SIGNED_CERT)
-        (head,resp) = conn.request(url)
-        return CASResponse(resp)
-    except Exception, e:
-        logging.exception("CASLIB: Error retrieving a response")
-        return None
-
-def parseCASResponse(response):
-  casType = "NoResponse"
-  xmlDict = {}
-  if response is None or len(response) == 0:
-    return (response, casType, xmlDict)
-  try:
-    doc = parseString(response)
-    nodeEl = doc.documentElement
-    if nodeEl.nodeName != 'cas:serviceResponse':
-      raise Exception("Parsing CAS Response failed. Expected cas:serviceResponse as head element in XML response.")
-    #First level, find out what type of CAS call it is
-    for child in nodeEl.childNodes:
-      if child.nodeType == child.ELEMENT_NODE:
-        casNode = child
-        casType = child.nodeName.replace("cas:","")
-    #Grab relevant info from remaining XML
-    xmlDict = xml2dict(casNode)
-  except Exception, e:
-    logging.warn(str(e))
-
-  return (response, casType, xmlDict)
-
-def xml2dict(tag):
-    """
-    Recursively create python dict's to replace the nested XML structure
-    """
-    nodeDict = {}
-    tagName = tag.nodeName.replace("cas:","")
-    for child in tag.childNodes:
-        if child.nodeType == child.TEXT_NODE:
-            text = child.nodeValue
-            if len(text.strip()) > 0:
-                nodeDict = {tagName : text.strip()}
-                logging.info("text",nodeDict)
-        elif child.nodeType == child.ELEMENT_NODE:
-            children = xml2dict(child)
-            nodeDict[tagName] = dict(nodeDict.get(tagName,{}).items() + children.items())
-    return nodeDict
+                     % (validate_response.proxy_ticket,
+                        validate_response.user,
+                        username))
+        # If we are Testing against a username, it must match.
+        # Otherwise the valid ticket is sufficient
+        return ((username == validate_response.user) if username else True,
+                validate_response)
 
 class CASResponse:
-  def __init__(self, response=None):
-    (self.xml, self.type, self.map) = parseCASResponse(response)
-    self.success = "success" in self.type.lower()
-    self.object = self.map[self.type]
+    def __init__(self, response):
+        self.response = response
+        (self.xml, self.type, self.map) = self.parse_cas_response(response)
+        self.success = "success" in self.type.lower()
+        self.object = self.map.get(self.type)
+        if not isinstance(self.object, dict):
+            return
+        #NOTE: Not all of these attributes will exist for a given type.
+        # The values you need are supecific to the type of request being made.
+        # For more information, RTD
+        self.user = self.object.get('user')
+        self.attributes = self.object.get('attributes')
+        #If using proxy:
+        self.proxy_granting_ticket = self.object.get('proxyGrantingTicket')
+        self.proxy_ticket = self.object.get('proxyTicket')
+
+    def parse_cas_response(self, response):
+        casNode = None
+        casType = "NoResponse"
+        xmlDict = {}
+        if response is None or len(response) == 0:
+            return (response, casType, xmlDict)
+        try:
+            doc = parseString(response)
+            nodeEl = doc.documentElement
+            if nodeEl.nodeName != 'cas:serviceResponse':
+                raise Exception("Parsing CAS Response failed. Expected cas:serviceResponse as head element in XML response.")
+            #First level, find out what type of CAS call it is
+            for child in nodeEl.childNodes:
+                if child.nodeType == child.ELEMENT_NODE:
+                    casNode = child
+                    casType = child.nodeName.replace("cas:","")
+            #Grab relevant info from remaining XML
+            xmlDict = self.xml2dict(casNode)
+        except Exception, e:
+          logging.warn(str(e))
+      
+        return (response, casType, xmlDict)
+  
+    def xml2dict(self, tag):
+        """
+        Recursively create python dict's to replace the nested XML structure
+        """
+        nodeDict = {}
+        tagName = tag.nodeName.replace("cas:","")
+        for child in tag.childNodes:
+            if child.nodeType == child.TEXT_NODE:
+                text = child.nodeValue
+                if len(text.strip()) > 0:
+                    nodeDict = {tagName : text.strip()}
+            elif child.nodeType == child.ELEMENT_NODE:
+                children = self.xml2dict(child)
+                nodeDict[tagName] = dict(nodeDict.get(tagName,{}).items() + children.items())
+        return nodeDict
+  
