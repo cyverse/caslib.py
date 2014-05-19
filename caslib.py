@@ -93,6 +93,14 @@ class CASClient():
     def _proxy_validate_url(self, ticket):
         return "%s/cas/proxyValidate?ticket=%s&service=%s"\
                % (self.server_url, ticket, self.proxy_callback)
+    def _logout_url(self, service_url):
+        return self.cas_server + "/cas/logout?service=" + service_url
+
+    def _login_url(self, gateway=False):
+        url =  self.cas_server + "/cas/login?service=" + self.validator_url
+        if (gateway):
+            url += '&gateway=true'
+        return url
 
     #Methods
     def cas_serviceValidate(self, ticket):
