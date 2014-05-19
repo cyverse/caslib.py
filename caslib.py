@@ -94,10 +94,9 @@ class CASClient():
         return "%s/cas/proxyValidate?ticket=%s&service=%s"\
                % (self.server_url, ticket, self.proxy_callback)
     def _logout_url(self, service_url):
-        return self.cas_server + "/cas/logout?service=" + service_url
-
+        return self.server_url + "/cas/logout?service=" + service_url
     def _login_url(self, gateway=False):
-        url =  self.cas_server + "/cas/login?service=" + self.validator_url
+        url =  self.server_url + "/cas/login?service=" + self.service_url
         if (gateway):
             url += '&gateway=true'
         return url
@@ -156,15 +155,15 @@ class CASClient():
             logging.warn("CASLIB: proxyGrantingTicket missing, cannot reauthenticate.")
             return (False, None)
         proxy_response = self.cas_proxy(proxyGrantingTicket)
-        if not proxy_response.object:
+        if proxy_response.error_str:
+            logger.error("ERROR on /proxy: Server returned:%s" % (proxy_response.object,))
+            return (False, proxy_response)
+        elif not proxy_response.object:
             raise Exception("Proxy Object DOES NOT MATCH."
                          " This will require a manual check"
                          " that response.type(%s) is an EXACT key match"
                          " to the key found in response.map:%s"
                          % (proxy_response.type, proxy_response.map))
-        elif isinstance(proxy_response.object, str):
-            logger.error("ERROR on /proxy: Server returned:%s" % (proxy_response.object,))
-            return (False, proxy_response)
         if not proxy_response.proxy_ticket:
             logging.error("Proxy Object MISSING TICKET! "
                           "This will require a manual check "
@@ -175,15 +174,15 @@ class CASClient():
         validate_response = self.cas_proxyValidate(proxy_response.proxy_ticket)
     
         #Authentic tickets will provide the username the ticket belongs to
-        if not validate_response.object:
+        if validate_response.error_str:
+            raise Exception("ERROR on /proxyValidate: Server returned:%s"
+            % (validate_response.object,))
+        elif not validate_response.object:
             raise Exception("ProxyValidate Object DOES NOT MATCH."
                          " This will require a manual check"
                          " that response.type(%s) is an EXACT key match"
                          " to the key found in response.map:%s"
                          % (validate_response.type, validate_response.map))
-        elif isinstance(validate_response.object,str):
-            raise Exception("ERROR on /proxyValidate: Server returned:%s"
-            % (validate_response.object,))
         elif not validate_response.user:
             logging.error("Object is missing 'user' attribute."
                           "Update the CAS client with the associated value"
@@ -205,9 +204,13 @@ class CASResponse:
         self.response = response
         (self.xml, self.type, self.map) = self.parse_cas_response(response)
         self.success = "success" in self.type.lower()
-        self.object = self.map.get(self.type)
-        if not isinstance(self.object, dict):
-            return
+        resp_object = self.map.get(self.type)
+        if isinstance(resp_object, dict):
+            self.object = resp_object
+            self.error_str = None
+        else:
+            self.object = {}
+            self.error_str = resp_object
         #NOTE: Not all of these attributes will exist for a given type.
         # The values you need are supecific to the type of request being made.
         # For more information, RTD
