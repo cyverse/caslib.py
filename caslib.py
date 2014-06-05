@@ -605,7 +605,25 @@ class OAuthClient():
 class OAuthResponse:
     def __init__(self, response, mime_type='urlencoded'):
         self.response = response
+        #Raw mapping
         self.map = self.parse_response(response, mime_type)
+        #Convenience
+        self.token = None
+        self.expires = -1
+        self.profile = {}
+
+        if "access_token" in self.map:
+            self.token =self.map['access_token'][0]
+            self.expires = int(self.map['expires'][0])
+
+        if "id" in self.map:
+            self.profile = self._build_profile()
+    def _build_profile(self):
+        self.profile['username'] = self.map["id"]
+        attrs = {}
+        for attr in self.map['attributes']:
+            for k,v in attr.items():
+                self.profile[k] = v
 
     def parse_response(self, response, mime_type):
         response_map = {}
