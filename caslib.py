@@ -56,165 +56,12 @@ Advanced Usage:
     
 """
 from xml.dom.minidom import parse, parseString
+from datetime import datetime, timedelta
 import json
 import logging
 import requests
 import uuid
 import urlparse
-
-
-class SAMLClient():
-    """
-    Creates a new 'connection' to the CAS server
-    keeping track of information about the current service request and/or proxy
-    information.
-    """
-    def __init__(self, server_url, service_url, auth_prefix='/cas', envelope_txt=None):
-        # Gather Parameters
-        self.server_url = server_url
-        self.service_url = service_url
-        self.auth_prefix = auth_prefix
-
-    def _service_validate_envelope(self, ticket):
-        return """<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
-  <SOAP-ENV:Header/>
-  <SOAP-ENV:Body>
-    <samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1"
-      MinorVersion="1" RequestID="_192.168.16.51.1024506224022"
-      IssueInstant="2002-06-19T17:03:44.022Z">
-      <samlp:AssertionArtifact>
-        %s
-      </samlp:AssertionArtifact>
-    </samlp:Request>
-  </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>""" % (ticket,)
-
-    def get_saml_response(self, url, envelope):
-        try:
-            response = requests.post(url, data=envelope)
-            return SAMLResponse(response.text)
-        except Exception, e:
-            logging.exception("SAML: Error retrieving a response")
-            raise#return None
-
-
-    def _service_validate_url(self, ticket):
-        return "%s%s/samlValidate?TARGET=%s&service=%s&ticket=%s"\
-               % (self.server_url, self.auth_prefix, self.service_url, self.service_url, ticket)
-    def _logout_url(self, service_url):
-        return self.server_url + "%s/logout?service=%s" % (self.auth_prefix, service_url)
-    def _login_url(self, gateway=False):
-        url =  self.server_url + "%s/login?service=%s" % (self.auth_prefix, self.service_url)
-        if (gateway):
-            url += '&gateway=true'
-        return url
-    def _login_request(self, username, pasword):
-        url = self._login_url()
-        if username and password:
-            login_ticket = "LT-CASLIB-%s" % uuid.uuid4()
-            url += '&username=%s' % username
-            url += '&password=%s' % password
-            url += '&lt=%s' % login_ticket
-        return self.get_saml_response(url)
-
-    #Methods
-    def saml_serviceValidate(self, ticket):
-        """
-        Calls serviceValidate using (ticket)
-        returns (validTicket, username, proxied_user)
-        """
-        if ticket is None:
-            if self.proxy_url:
-                return (False,"","")
-            return (False,"")
-    
-        #Use defaults if not set
-        saml_validate_url = self._service_validate_url(ticket)
-        saml_envelope = self._service_validate_envelope(ticket)
-        logging.info("samlLIB: /serviceValidate URL:"+saml_validate_url)
-        return self.get_saml_response(saml_validate_url, saml_envelope)
-    #TODO: Determine if it is possible to integrate 'proxy' with SAML
-    #def saml_proxy(self, proxy_ticket):
-    #    """
-    #    Calls saml using proxy to see what user is logged in
-    #    returns true if the user matches parameter 'user' 
-    #    if empty, the targetService will be filled by PROXY_CALLBACK_URL
-    #    """
-    #    if not self.proxy_callback:
-    #        raise Exception(
-    #                "Conflict: Client is not initialized with a proxy callback URL")
-    #    proxy_url = self._proxy_url(proxy_ticket)
-    #    return self.get_saml_response(proxy_url)
-
-    #def saml_proxyValidate(self, proxied_serviceticket):
-    #    """
-    #    Calls /saml/proxyValidate with the service ticket obtained from a call to saml_proxy
-    #    The saml user will be returned
-    #    """
-    #    if not self.proxy_url:
-    #        raise Exception(
-    #                "Conflict: Client is not initialized with a proxy URL")
-    #    saml_valid_url = self._proxy_validate_url(proxied_serviceticket)
-    #    return self.get_saml_response(saml_valid_url)
-    #
-    ##Composite methods
-    #def reauthenticate(self, proxyGrantingTicket, username=None):
-    #    """
-    #    Generalizes the saml proxy for simple reauthentication
-    #    PARAMS:
-    #    * proxyGrantingTicket - A ticket we can use to reauthenticate, if it is valid.
-    #    * username - If the PGT is valid and its ticket produces a user, that
-    #                 user must match the username to be a validTicket
-    #    RETURNS:
-    #    (validTicket, response)
-    #    """
-    #    if not proxyGrantingTicket:
-    #        logging.warn("samlLIB: proxyGrantingTicket missing, cannot reauthenticate.")
-    #        return (False, None)
-    #    proxy_response = self.saml_proxy(proxyGrantingTicket)
-    #    if proxy_response.error_str:
-    #        logger.error("ERROR on /proxy: Server returned:%s" % (proxy_response.object,))
-    #        return (False, proxy_response)
-    #    elif not proxy_response.object:
-    #        raise Exception("Proxy Object DOES NOT MATCH."
-    #                     " This will require a manual check"
-    #                     " that response.type(%s) is an EXACT key match"
-    #                     " to the key found in response.map:%s"
-    #                     % (proxy_response.type, proxy_response.map))
-    #    if not proxy_response.proxy_ticket:
-    #        logging.error("Proxy Object MISSING TICKET! "
-    #                      "This will require a manual check "
-    #                      "that the response object (%s) contains 'proxyTicket'"
-    #                      % proxy_response.object)
-    #        return (False, proxy_response)
-    #    #Validate the ticket -- Is it authentic?
-    #    validate_response = self.saml_proxyValidate(proxy_response.proxy_ticket)
-    #
-    #    #Authentic tickets will provide the username the ticket belongs to
-    #    if validate_response.error_str:
-    #        raise Exception("ERROR on /proxyValidate: Server returned:%s"
-    #        % (validate_response.object,))
-    #    elif not validate_response.object:
-    #        raise Exception("ProxyValidate Object DOES NOT MATCH."
-    #                     " This will require a manual check"
-    #                     " that response.type(%s) is an EXACT key match"
-    #                     " to the key found in response.map:%s"
-    #                     % (validate_response.type, validate_response.map))
-    #    elif not validate_response.user:
-    #        logging.error("Object is missing 'user' attribute."
-    #                      "Update the saml client with the associated value"
-    #                      "found in this object: %s"
-    #                     % (validate_response.object))
-    #        return (False, validate_response)
-    #
-    #    logging.info("saml Ticket:%s saml ProxyUser:%s User Tested: %s"
-    #                 % (validate_response.proxy_ticket,
-    #                    validate_response.user,
-    #                    username))
-    #    # If we are Testing against a username, it must match.
-    #    # Otherwise the valid ticket is sufficient
-    #    return ((username == validate_response.user) if username else True,
-    #            validate_response)
 ################################################################################
 class CASClient():
     """
@@ -415,7 +262,162 @@ class CASResponse:
                 children = self.xml2dict(child)
                 nodeDict[tagName] = dict(nodeDict.get(tagName,{}).items() + children.items())
         return nodeDict
-  
+
+
+class SAMLClient():
+    """
+    Creates a new 'connection' to the CAS server
+    keeping track of information about the current service request and/or proxy
+    information.
+    """
+    def __init__(self, server_url, service_url, auth_prefix='/cas', envelope_txt=None):
+        # Gather Parameters
+        self.server_url = server_url
+        self.service_url = service_url
+        self.auth_prefix = auth_prefix
+
+    def _service_validate_envelope(self, ticket):
+        return """<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
+  <SOAP-ENV:Header/>
+  <SOAP-ENV:Body>
+    <samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1"
+      MinorVersion="1" RequestID="_192.168.16.51.1024506224022"
+      IssueInstant="2002-06-19T17:03:44.022Z">
+      <samlp:AssertionArtifact>
+        %s
+      </samlp:AssertionArtifact>
+    </samlp:Request>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>""" % (ticket,)
+
+    def get_saml_response(self, url, envelope):
+        try:
+            response = requests.post(url, data=envelope)
+            return SAMLResponse(response.text)
+        except Exception, e:
+            logging.exception("SAML: Error retrieving a response")
+            raise#return None
+
+
+    def _service_validate_url(self, ticket):
+        return "%s%s/samlValidate?TARGET=%s&service=%s&ticket=%s"\
+               % (self.server_url, self.auth_prefix, self.service_url, self.service_url, ticket)
+    def _logout_url(self, service_url):
+        return self.server_url + "%s/logout?service=%s" % (self.auth_prefix, service_url)
+    def _login_url(self, gateway=False):
+        url =  self.server_url + "%s/login?service=%s" % (self.auth_prefix, self.service_url)
+        if (gateway):
+            url += '&gateway=true'
+        return url
+    def _login_request(self, username, pasword):
+        url = self._login_url()
+        if username and password:
+            login_ticket = "LT-CASLIB-%s" % uuid.uuid4()
+            url += '&username=%s' % username
+            url += '&password=%s' % password
+            url += '&lt=%s' % login_ticket
+        return self.get_saml_response(url)
+
+    #Methods
+    def saml_serviceValidate(self, ticket):
+        """
+        Calls serviceValidate using (ticket)
+        returns (validTicket, username, proxied_user)
+        """
+        if ticket is None:
+            if self.proxy_url:
+                return (False,"","")
+            return (False,"")
+    
+        #Use defaults if not set
+        saml_validate_url = self._service_validate_url(ticket)
+        saml_envelope = self._service_validate_envelope(ticket)
+        logging.info("samlLIB: /serviceValidate URL:"+saml_validate_url)
+        return self.get_saml_response(saml_validate_url, saml_envelope)
+    #TODO: Determine if it is possible to integrate 'proxy' with SAML
+    #def saml_proxy(self, proxy_ticket):
+    #    """
+    #    Calls saml using proxy to see what user is logged in
+    #    returns true if the user matches parameter 'user' 
+    #    if empty, the targetService will be filled by PROXY_CALLBACK_URL
+    #    """
+    #    if not self.proxy_callback:
+    #        raise Exception(
+    #                "Conflict: Client is not initialized with a proxy callback URL")
+    #    proxy_url = self._proxy_url(proxy_ticket)
+    #    return self.get_saml_response(proxy_url)
+
+    #def saml_proxyValidate(self, proxied_serviceticket):
+    #    """
+    #    Calls /saml/proxyValidate with the service ticket obtained from a call to saml_proxy
+    #    The saml user will be returned
+    #    """
+    #    if not self.proxy_url:
+    #        raise Exception(
+    #                "Conflict: Client is not initialized with a proxy URL")
+    #    saml_valid_url = self._proxy_validate_url(proxied_serviceticket)
+    #    return self.get_saml_response(saml_valid_url)
+    #
+    ##Composite methods
+    #def reauthenticate(self, proxyGrantingTicket, username=None):
+    #    """
+    #    Generalizes the saml proxy for simple reauthentication
+    #    PARAMS:
+    #    * proxyGrantingTicket - A ticket we can use to reauthenticate, if it is valid.
+    #    * username - If the PGT is valid and its ticket produces a user, that
+    #                 user must match the username to be a validTicket
+    #    RETURNS:
+    #    (validTicket, response)
+    #    """
+    #    if not proxyGrantingTicket:
+    #        logging.warn("samlLIB: proxyGrantingTicket missing, cannot reauthenticate.")
+    #        return (False, None)
+    #    proxy_response = self.saml_proxy(proxyGrantingTicket)
+    #    if proxy_response.error_str:
+    #        logger.error("ERROR on /proxy: Server returned:%s" % (proxy_response.object,))
+    #        return (False, proxy_response)
+    #    elif not proxy_response.object:
+    #        raise Exception("Proxy Object DOES NOT MATCH."
+    #                     " This will require a manual check"
+    #                     " that response.type(%s) is an EXACT key match"
+    #                     " to the key found in response.map:%s"
+    #                     % (proxy_response.type, proxy_response.map))
+    #    if not proxy_response.proxy_ticket:
+    #        logging.error("Proxy Object MISSING TICKET! "
+    #                      "This will require a manual check "
+    #                      "that the response object (%s) contains 'proxyTicket'"
+    #                      % proxy_response.object)
+    #        return (False, proxy_response)
+    #    #Validate the ticket -- Is it authentic?
+    #    validate_response = self.saml_proxyValidate(proxy_response.proxy_ticket)
+    #
+    #    #Authentic tickets will provide the username the ticket belongs to
+    #    if validate_response.error_str:
+    #        raise Exception("ERROR on /proxyValidate: Server returned:%s"
+    #        % (validate_response.object,))
+    #    elif not validate_response.object:
+    #        raise Exception("ProxyValidate Object DOES NOT MATCH."
+    #                     " This will require a manual check"
+    #                     " that response.type(%s) is an EXACT key match"
+    #                     " to the key found in response.map:%s"
+    #                     % (validate_response.type, validate_response.map))
+    #    elif not validate_response.user:
+    #        logging.error("Object is missing 'user' attribute."
+    #                      "Update the saml client with the associated value"
+    #                      "found in this object: %s"
+    #                     % (validate_response.object))
+    #        return (False, validate_response)
+    #
+    #    logging.info("saml Ticket:%s saml ProxyUser:%s User Tested: %s"
+    #                 % (validate_response.proxy_ticket,
+    #                    validate_response.user,
+    #                    username))
+    #    # If we are Testing against a username, it must match.
+    #    # Otherwise the valid ticket is sufficient
+    #    return ((username == validate_response.user) if username else True,
+    #            validate_response)
+
+
 class SAMLResponse:
     def __init__(self, response):
         self.response = response
@@ -520,12 +522,13 @@ class SAMLResponse:
         nodeMap[tagName]  = children_map
 
         return nodeMap
-  
+
+
 class OAuthClient():
     """
-    Creates a new 'connection' to the CAS server
-    keeping track of information about the current service request and/or proxy
-    information.
+    This is a 'CAS' OAuthClient, and although it implements OAuth 2.0 Protocol,
+    it is NOT feature-complete, and in some cases works differently than
+    'other' OAuth2 servers
     """
     def __init__(self, server_url, callback_url, client_id, client_secret, auth_prefix='/cas', envelope_txt=None):
         # Gather Parameters
@@ -534,6 +537,30 @@ class OAuthClient():
         self.client_id = client_id
         self.client_secret = client_secret
         self.auth_prefix = auth_prefix
+
+    def get_access_token(self, oauth_code):
+        validate_resp_map = self._validateCode(oauth_code)
+        if not validate_resp_map or 'access_token' not in validate_resp_map:
+            return None, None
+        access_token = validate_resp_map['access_token'][0]
+        expires = int(validate_resp_map['expires'][0])
+        expiry_date = datetime.now() + timedelta(seconds=expires)
+        return access_token, expiry_date
+
+    def get_profile(self, access_token):
+        """
+        Using the access_token, retrieve Profile
+        """
+        if access_token is None:
+            return None
+    
+        #Use defaults if not set
+        oauth_profile_url = self._profile_url(access_token)
+        oauth_resp =  self.get_oauth_response(oauth_profile_url, "json")
+        return oauth_resp.map
+    
+    def authorize_url(self):
+        return self._login_url()
 
     def get_oauth_response(self, url, mime_type='urlencoded'):
         try:
@@ -548,21 +575,20 @@ class OAuthClient():
                 "access_token=%s"\
                 % (self.server_url, self.auth_prefix,
                         access_token)
+
     def _access_token_url(self, code):
         return "%s%s/oauth2.0/accessToken?"\
                 "code=%s&client_id=%s&client_secret=%s&redirect_uri=%s"\
                 % (self.server_url, self.auth_prefix, 
                    code, self.client_id, self.client_secret, self.callback_url)
+
     def _login_url(self):
         url =  "%s%s/oauth2.0/authorize?client_id=%s&redirect_uri=%s" %\
                 (self.server_url, self.auth_prefix,
                         self.client_id, self.callback_url)
         return url
-    #Methods
-    def authorize_url(self):
-        return self._login_url()
 
-    def oauth_validateCode(self, code):
+    def _validateCode(self, code):
         """
         Calls accessToken using (code) and other req. params
         returns (validTicket, username)
@@ -575,18 +601,6 @@ class OAuthClient():
         oauth_resp = self.get_oauth_response(oauth_validate_url, "urlencoded")
         return oauth_resp.map
 
-    def oauth_profile(self, access_token):
-        """
-        Calls accessToken using (code) and other req. params
-        returns (validTicket, username)
-        """
-        if access_token is None:
-            return (False,"")
-    
-        #Use defaults if not set
-        oauth_profile_url = self._profile_url(access_token)
-        oauth_resp =  self.get_oauth_response(oauth_profile_url, "json")
-        return oauth_resp.map
 
 class OAuthResponse:
     def __init__(self, response, mime_type='urlencoded'):
