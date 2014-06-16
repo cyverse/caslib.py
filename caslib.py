@@ -559,6 +559,9 @@ class OAuthClient():
         oauth_resp =  self.get_oauth_response(oauth_profile_url, "json")
         return oauth_resp.map
     
+    def logout(self, redirect=None):
+        return self._logout_url(redirect)
+
     def authorize_url(self):
         return self._login_url()
 
@@ -581,6 +584,12 @@ class OAuthClient():
                 "code=%s&client_id=%s&client_secret=%s&redirect_uri=%s"\
                 % (self.server_url, self.auth_prefix, 
                    code, self.client_id, self.client_secret, self.callback_url)
+
+    def _logout_url(self, redirect_url=None):
+        url =  "%s%s/logout?%s" % \
+                (self.server_url, self.auth_prefix,
+                 "url=%s" % redirect_url if redirect_url else "")
+        return url
 
     def _login_url(self):
         url =  "%s%s/oauth2.0/authorize?client_id=%s&redirect_uri=%s" %\
