@@ -1,11 +1,12 @@
 CASLIB.PY
 =========
 
-A CAS authentication library written in python using httplib2
+A library to support OAuth, SAML, and CAS Clients as provided from a JASIG-CAS(3.5-4.0.0+) server
+Written in python using requests
 
 _Requirements_
 - requests
-- CAS Server (3.5.2 - 4.0.0+)
+- CAS Server
   - cas-server-support-oauth (Required for OAuth support)
   - cas-server-support-saml (Required for SAML support)
 
@@ -22,6 +23,7 @@ The authentication system used token-based sessions that have a timeout, and the
 As caslib.py has been developled it has been used as a robust CAS library for multiple projects within the iPlant Collaborative without issues,
 with that being said this implementation is not guaranteed to work for your implementation of CAS.
 
+The documentation on CAS is getting better, to learn about any of these protocols, visit: http://jasig.github.io/cas/4.0.0/index.html
 CASLIB.PY HISTORY
 =================
 [1.0] - caslib.py initial development complete
