@@ -2,6 +2,7 @@ CASLIB.PY
 =========
 
 A library to support OAuth, SAML, and CAS Clients as provided from a JASIG-CAS(3.5-4.0.0+) server
+
 Written in python using requests
 
 _Requirements_
@@ -12,7 +13,9 @@ _Requirements_
 
 AUTHOR
 ======
+
 Steven Gregory - iPlant Collaborative © 2012-2014
+
 CONTACT: sgregory@iplantcollaborative.org
 
 
@@ -33,7 +36,7 @@ In the first iteration of the library it served only two primary functions:
 * Validating a ticket after a CAS login (aka BASIC AUTHENTICATION)
 * Validating a proxyTicket and it's associated user (aka RE-AUTHENTICATION BY PROXY)
 
-[2.0] - caslib.py refactored to include support multiple 'Client', 'Response' protocols
+[2.0] - caslib.py refactored to support multiple 'Client', 'Response' protocols
 
 If supported by your CAS Server, caslib.py now includes support for:
 * CAS authentication (Basic & through Proxy)
@@ -228,8 +231,8 @@ _(USER,IOU,ID) Storage methods:_
 
 OAUTH Authentication
 ===================
-    OAuth Authentication is very similar to CAS Authentication, the difference
-    is in the values you request from the client/response objects.
+
+OAuth Authentication is very similar to CAS Authentication, the difference is in the values you request from the client/response objects.
 
 ###settings.py###
   ```python
@@ -293,17 +296,12 @@ SAML Authentication
   ```python
     ##These settings will be used often
     CAS_SERVER = "https://path.to_cas_server.org"
-    OAUTH_CLIENT_KEY = "cas_registered_client"
-    OAUTH_CLIENT_SECRET = "shh_its_a_secret"
-    #This URL exists on YOUR server
-    OAUTH_CLIENT_CALLBACK = SERVER_URL + "/oauth2.0/callbackAuthorize"
   ```
 ###views.py###
 ```python
 def get_saml_client():
     s_client = SAMLClient(settings.CAS_SERVER,
-            settings.SERVER_URL,
-            auth_prefix='/castest')
+            settings.SERVER_URL)
     return s_client
 
 def saml_validateTicket(request):
