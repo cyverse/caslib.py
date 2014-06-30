@@ -1,10 +1,10 @@
 """
 caslib.py
 CAS Library for Python
-Contact: esteve <esteve@iplantcollaborative.org>
+Contact: Steve Gregory <sgregory@iplantcollaborative.org>
 
 Requirements:
-  CAS 2.0+ Server
+  CAS 3.5.x - 4.0.0+ Server
 
 Basic Authentication Scenario:
   * Service only wants to authenticate once to check a user has validated with CAS 
