@@ -160,7 +160,7 @@ class CASClient():
             return (False, None)
         proxy_response = self.cas_proxy(proxyGrantingTicket)
         if proxy_response.error_str:
-            logger.error("ERROR on /proxy: Server returned:%s" % (proxy_response.object,))
+            logging.error("ERROR on /proxy: Server returned:%s" % (proxy_response.object,))
             return (False, proxy_response)
         elif not proxy_response.object:
             raise Exception("Proxy Object DOES NOT MATCH."
@@ -374,7 +374,7 @@ class SAMLClient():
     #        return (False, None)
     #    proxy_response = self.saml_proxy(proxyGrantingTicket)
     #    if proxy_response.error_str:
-    #        logger.error("ERROR on /proxy: Server returned:%s" % (proxy_response.object,))
+    #        logging.error("ERROR on /proxy: Server returned:%s" % (proxy_response.object,))
     #        return (False, proxy_response)
     #    elif not proxy_response.object:
     #        raise Exception("Proxy Object DOES NOT MATCH."
