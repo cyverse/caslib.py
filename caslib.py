@@ -70,12 +70,13 @@ class CASClient():
     information.
     """
     def __init__(self, server_url, service_url,
-                 proxy_url=None, proxy_callback=None, self_signed_cert=False):
+                 proxy_url=None, proxy_callback=None, auth_prefix='/cas', self_signed_cert=False):
         # Gather Parameters
         self.server_url = server_url
         self.service_url = service_url
         self.proxy_url = proxy_url
         self.proxy_callback = proxy_callback
+        self.auth_prefix = auth_prefix
         self.self_signed_cert = self_signed_cert
 
     def get_cas_response(self, url):
@@ -88,19 +89,21 @@ class CASClient():
 
 
     def _service_validate_url(self, ticket):
-        return "%s/cas/serviceValidate?ticket=%s&service=%s%s"\
-               % (self.server_url, ticket, self.service_url, 
+        return "%s%s/serviceValidate?ticket=%s&service=%s%s"\
+               % (self.server_url, self.auth_prefix, ticket, self.service_url, 
                "" if not self.proxy_url else "&pgtUrl=%s" % self.proxy_url)
     def _proxy_url(self, ticket):
-        return "%s/cas/proxy?targetService=%s&pgt=%s"\
-               % (self.server_url, self.proxy_callback, ticket)
+        return "%s%s/proxy?targetService=%s&pgt=%s"\
+               % (self.server_url, self.auth_prefix, self.proxy_callback, ticket)
     def _proxy_validate_url(self, ticket):
-        return "%s/cas/proxyValidate?ticket=%s&service=%s"\
-               % (self.server_url, ticket, self.proxy_callback)
+        return "%s%s/proxyValidate?ticket=%s&service=%s"\
+               % (self.server_url, self.auth_prefix, ticket, self.proxy_callback)
     def _logout_url(self, service_url):
-        return self.server_url + "/cas/logout?service=" + service_url
+        return "%s%s/logout?service=%s"\
+                % (self.server_url, self.auth_prefix,, service_url)
     def _login_url(self, gateway=False):
-        url =  self.server_url + "/cas/login?service=" + self.service_url
+        return "%s%s/login?service=%s"\
+                % (self.server_url, self.auth_prefix,, self.service_url)
         if (gateway):
             url += '&gateway=true'
         return url
