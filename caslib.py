@@ -100,10 +100,10 @@ class CASClient():
                % (self.server_url, self.auth_prefix, ticket, self.proxy_callback)
     def _logout_url(self, service_url):
         return "%s%s/logout?service=%s"\
-                % (self.server_url, self.auth_prefix,, service_url)
+                % (self.server_url, self.auth_prefix, service_url)
     def _login_url(self, gateway=False):
-        return "%s%s/login?service=%s"\
-                % (self.server_url, self.auth_prefix,, self.service_url)
+        url = "%s%s/login?service=%s"\
+                % (self.server_url, self.auth_prefix, self.service_url)
         if (gateway):
             url += '&gateway=true'
         return url
@@ -472,6 +472,7 @@ class SAMLResponse:
                 samlMap.update(self.xml2dict(child))
         except Exception, e:
           logging.warn(str(e))
+          raise Exception("Malformed SAML response: %s" % response)
       
         return (doc, samlMap)
 
