@@ -17,5 +17,5 @@ setup(name='caslib',
       url='https://github.com/iPlantCollaborativeOpenSource/caslib.py',
       py_modules=['caslib'],
       #packages=setuptools.find_packages(),
-      install_requires = ['requests == 2.2.0'],
+      install_requires = ['requests >= 2.2.1'],
      )
