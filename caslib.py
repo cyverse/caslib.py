@@ -61,7 +61,10 @@ import json
 import logging
 import requests
 import uuid
-import urlparse
+try:
+    import urlparse
+except ImportError:
+    from urllib import parse as urlparse
 ################################################################################
 class CASClient():
     """
@@ -83,7 +86,7 @@ class CASClient():
         try:
             response = requests.get(url, verify=self.self_signed_cert)
             return CASResponse(response.text)
-        except Exception, e:
+        except Exception as e:
             logging.exception("CASLIB: Error retrieving a response")
             return None
 
@@ -245,7 +248,7 @@ class CASResponse:
                     casType = child.nodeName.replace("cas:","")
             #Grab relevant info from remaining XML
             xmlDict = self.xml2dict(casNode)
-        except Exception, e:
+        except Exception as e:
           logging.warn(str(e))
       
         return (response, casType, xmlDict)
@@ -263,7 +266,7 @@ class CASResponse:
                     nodeDict = {tagName : text.strip()}
             elif child.nodeType == child.ELEMENT_NODE:
                 children = self.xml2dict(child)
-                nodeDict[tagName] = dict(nodeDict.get(tagName,{}).items() + children.items())
+                nodeDict.setdefault(tagName, {}).update(children)
         return nodeDict
 
 
@@ -297,7 +300,7 @@ class SAMLClient():
         try:
             response = requests.post(url, data=envelope)
             return SAMLResponse(response.text)
-        except Exception, e:
+        except Exception as e:
             logging.exception("SAML: Error retrieving a response")
             raise#return None
 
@@ -470,7 +473,7 @@ class SAMLResponse:
                                     "Expected ELEMENT_NODE to follow saml1p:Response.")
                 #Grab relevant info from remaining XML
                 samlMap.update(self.xml2dict(child))
-        except Exception, e:
+        except Exception as e:
           logging.warn(str(e))
           raise Exception("Malformed SAML response: %s" % response)
       
@@ -573,7 +576,7 @@ class OAuthClient():
         try:
             response = requests.get(url)
             return OAuthResponse(response.text, mime_type)
-        except Exception, e:
+        except Exception as e:
             logging.exception("CASLIB: Error retrieving an OAuth response")
             raise#return None
 
