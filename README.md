@@ -14,7 +14,7 @@ _Requirements_
 AUTHOR
 ======
 
-Steven Gregory - iPlant Collaborative © 2012-2014
+Steven Gregory - iPlant Collaborative © 2012-2015
 
 CONTACT: sgregory@iplantcollaborative.org
 
