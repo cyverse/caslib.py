@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
     
 setup(name='caslib.py',
-      version='2.2.0',
+      version='2.2.2',
       description='CAS Client library',
       author='iPlant Collaborative',
       author_email='atmodevs@gmail.com',
