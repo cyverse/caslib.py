@@ -588,7 +588,7 @@ class OAuthResponse:
             self.expires = int(self.map['expires'][0])
 
         if "id" in self.map:
-            self.profile = self._build_profile()
+            self._build_profile()
 
     def _build_profile(self):
         self.profile['username'] = self.map["id"]
