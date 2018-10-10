@@ -554,7 +554,7 @@ class OAuthClient():
                % (self.auth_prefix, service_url)
 
     def _login_url(self):
-        url = "%s%s/oauth2.0/authorize?client_id=%s&redirect_uri=%s" %\
+        url = "%s%s/oauth2.0/authorize?client_id=%s&response_type=code&redirect_uri=%s" %\
               (self.server_url, self.auth_prefix,
                self.client_id, self.callback_url)
         return url
