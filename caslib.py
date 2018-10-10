@@ -503,13 +503,11 @@ class OAuthClient():
         self.auth_prefix = auth_prefix
 
     def get_access_token(self, oauth_code):
-        validate_resp_map = self._validateCode(oauth_code)
-        if not validate_resp_map or 'access_token' not in validate_resp_map:
+        oauth_resp = self._validateCode(oauth_code)
+        if not oauth_resp or not oauth_resp.token or not oauth_resp.expires:
             return None, None
-        access_token = validate_resp_map['access_token'][0]
-        expires = int(validate_resp_map['expires'][0])
-        expiry_date = datetime.now() + timedelta(seconds=expires)
-        return access_token, expiry_date
+        expiry_date = datetime.now() + timedelta(seconds=oauth_resp.expires)
+        return oauth_resp.token, expiry_date
 
     def get_profile(self, access_token):
         """
@@ -523,7 +521,7 @@ class OAuthClient():
         oauth_resp = self.get_oauth_response(oauth_profile_url, "json")
         if 'error' in oauth_resp.map:
             raise Exception("Error occurred during call to %s - %s" % (oauth_profile_url, oauth_resp.map))
-        return oauth_resp.map
+        return oauth_resp.profile
 
     def logout(self, redirect):
         return self._logout_url(redirect)
@@ -545,8 +543,9 @@ class OAuthClient():
                 % (self.server_url, self.auth_prefix, access_token)
 
     def _access_token_url(self, code):
-        return "%s%s/oauth2.0/accessToken?"\
-                "code=%s&client_id=%s&client_secret=%s&redirect_uri=%s"\
+        return "%s%s/oauth2.0/accessToken?" \
+                "code=%s&client_id=%s&client_secret=%s&redirect_uri=%s&" \
+                "grant_type=authorization_code" \
                 % (self.server_url, self.auth_prefix,
                    code, self.client_id, self.client_secret, self.callback_url)
 
@@ -555,7 +554,7 @@ class OAuthClient():
                % (self.auth_prefix, service_url)
 
     def _login_url(self):
-        url = "%s%s/oauth2.0/authorize?client_id=%s&redirect_uri=%s" %\
+        url = "%s%s/oauth2.0/authorize?client_id=%s&response_type=code&redirect_uri=%s" %\
               (self.server_url, self.auth_prefix,
                self.client_id, self.callback_url)
         return url
@@ -570,7 +569,7 @@ class OAuthClient():
         # Use defaults if not set
         oauth_validate_url = self._access_token_url(code)
         oauth_resp = self.get_oauth_response(oauth_validate_url, "urlencoded")
-        return oauth_resp.map
+        return oauth_resp
 
 
 class OAuthResponse:
@@ -585,16 +584,25 @@ class OAuthResponse:
 
         if "access_token" in self.map:
             self.token = self.map['access_token'][0]
-            self.expires = int(self.map['expires'][0])
+
+        for key in ["expires", "expires_in"]:
+            if key in self.map:
+                self.expires = int(self.map.get(key)[0])
+                break
 
         if "id" in self.map:
-            self.profile = self._build_profile()
+            self._build_profile()
 
     def _build_profile(self):
         self.profile['username'] = self.map["id"]
-        for attr in self.map['attributes']:
-            for k, v in attr.items():
-                self.profile[k] = v
+        attributes = self.map['attributes']
+        if isinstance(attributes, list): # CAS 4
+            for attr in attributes:
+                if isinstance(attr, dict):
+                    for k, v in attr.items():
+                        self.profile[k] = v
+        elif isinstance(attributes, dict): # CAS 5
+            self.profile.update(attributes)
 
     def parse_response(self, response, mime_type):
         response_map = {}

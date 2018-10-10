@@ -1,7 +1,7 @@
 CASLIB.PY
 =========
 
-A library to support OAuth, SAML, and CAS Clients as provided from a JASIG-CAS(3.5-4.0.0+) server
+A library to support OAuth, SAML, and CAS Clients as provided from a JASIG-CAS(3.5-5.0.0+) server
 
 Written in python using requests
 
@@ -10,14 +10,6 @@ _Requirements_
 - CAS Server
   - cas-server-support-oauth (Required for OAuth support)
   - cas-server-support-saml (Required for SAML support)
-
-AUTHOR
-======
-
-Steven Gregory - iPlant Collaborative © 2012-2015
-
-CONTACT: sgregory@iplantcollaborative.org
-
 
 PREFACE
 -------
@@ -275,7 +267,7 @@ OAuth Authentication is very similar to CAS Authentication, the difference is in
       #Exchange token for profile
       user_profile = oauth_client.get_profile(access_token)
 
-      if not user_profile or "id" not in user_profile:
+      if not user_profile or "username" not in user_profile:
           logger.error("AccessToken is producing an INVALID profile! "
                        "Check the CAS server and caslib.py for more information.")
           #NOTE: Make sure this redirects the user OUT of the loop!
@@ -283,7 +275,7 @@ OAuth Authentication is very similar to CAS Authentication, the difference is in
 
       #ASSERT: A valid OAuth token gave us the Users Profile.
       # Now create an AuthToken and return it
-      username = user_profile["id"]
+      username = user_profile["username"]
       #Implementation specific.. create an API token and return
       # it to the user...
       return HttpResponseRedirect("my.app.com/application")
