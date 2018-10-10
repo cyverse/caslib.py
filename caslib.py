@@ -543,8 +543,9 @@ class OAuthClient():
                 % (self.server_url, self.auth_prefix, access_token)
 
     def _access_token_url(self, code):
-        return "%s%s/oauth2.0/accessToken?"\
-                "code=%s&client_id=%s&client_secret=%s&redirect_uri=%s"\
+        return "%s%s/oauth2.0/accessToken?" \
+                "code=%s&client_id=%s&client_secret=%s&redirect_uri=%s&" \
+                "grant_type=authorization_code" \
                 % (self.server_url, self.auth_prefix,
                    code, self.client_id, self.client_secret, self.callback_url)
 
