@@ -584,16 +584,25 @@ class OAuthResponse:
 
         if "access_token" in self.map:
             self.token = self.map['access_token'][0]
-            self.expires = int(self.map['expires'][0])
+
+        for key in ["expires", "expires_in"]:
+            if key in self.map:
+                self.expires = int(self.map.get(key)[0])
+                break
 
         if "id" in self.map:
             self._build_profile()
 
     def _build_profile(self):
         self.profile['username'] = self.map["id"]
-        for attr in self.map['attributes']:
-            for k, v in attr.items():
-                self.profile[k] = v
+        attributes = self.map['attributes']
+        if isinstance(attributes, list): # CAS 4
+            for attr in attributes:
+                if isinstance(attr, dict):
+                    for k, v in attr.items():
+                        self.profile[k] = v
+        elif isinstance(attributes, dict): # CAS 5
+            self.profile.update(attributes)
 
     def parse_response(self, response, mime_type):
         response_map = {}
