@@ -503,13 +503,11 @@ class OAuthClient():
         self.auth_prefix = auth_prefix
 
     def get_access_token(self, oauth_code):
-        validate_resp_map = self._validateCode(oauth_code)
-        if not validate_resp_map or 'access_token' not in validate_resp_map:
+        oauth_resp = self._validateCode(oauth_code)
+        if not oauth_resp or not oauth_resp.token or not oauth_resp.expires:
             return None, None
-        access_token = validate_resp_map['access_token'][0]
-        expires = int(validate_resp_map['expires'][0])
-        expiry_date = datetime.now() + timedelta(seconds=expires)
-        return access_token, expiry_date
+        expiry_date = datetime.now() + timedelta(seconds=oauth_resp.expires)
+        return oauth_resp.token, expiry_date
 
     def get_profile(self, access_token):
         """
@@ -570,7 +568,7 @@ class OAuthClient():
         # Use defaults if not set
         oauth_validate_url = self._access_token_url(code)
         oauth_resp = self.get_oauth_response(oauth_validate_url, "urlencoded")
-        return oauth_resp.map
+        return oauth_resp
 
 
 class OAuthResponse:
