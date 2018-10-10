@@ -523,7 +523,7 @@ class OAuthClient():
         oauth_resp = self.get_oauth_response(oauth_profile_url, "json")
         if 'error' in oauth_resp.map:
             raise Exception("Error occurred during call to %s - %s" % (oauth_profile_url, oauth_resp.map))
-        return oauth_resp.map
+        return oauth_resp.profile
 
     def logout(self, redirect):
         return self._logout_url(redirect)
